@@ -3,6 +3,7 @@ classdef DeviceParameter < handle
         bits
         upperLimit  %Upper limit on value
         lowerLimit  %Lower limit on value
+        type
     end
     
     properties(SetAccess = protected)
@@ -14,7 +15,7 @@ classdef DeviceParameter < handle
     end
     
     methods
-        function self = DeviceParameter(bits,regIn)
+        function self = DeviceParameter(bits,regIn,type)
             self.bits = bits;
             self.regs = regIn;
             if size(self.bits,1) ~= numel(self.regs)
@@ -23,6 +24,18 @@ classdef DeviceParameter < handle
             
             self.toIntegerFunction = @(x) x;
             self.fromIntegerFunction = @(x) x;
+            
+            if nargin < 3
+                self.type = 'uint32';
+            elseif strcmp(type,'int32') || strcmp(type,'uint32') || strcmp(type,'int16')
+                self.type = type;
+            else
+                error('Type must be either ''uint32'', ''int32'', or ''int16''!');
+            end
+            
+            if numel(self.regs) > 1 && strcmp(self.type,'int32')
+                error('When the number of registers is larger than 1, type must be ''uint32''!');
+            end
         end
         
         function set.bits(self,bits)
@@ -123,6 +136,10 @@ classdef DeviceParameter < handle
             self.intValue = tmp;
             if islogical(self.intValue)
                 self.intValue = uint32(self.intValue);
+            elseif strcmpi(self.type,'int32')
+                self.intValue = typecast(int32(self.intValue),'uint32');
+            elseif strcmpi(self.type,'int16')
+                self.intValue = uint32(typecast(int16(self.intValue),'uint16'));
             end
             
             if numel(self.regs) == 1
@@ -141,6 +158,13 @@ classdef DeviceParameter < handle
             %value
             if numel(self.regs) == 1
                 self.intValue = self.regs.get(self.bits);
+                if strcmpi(self.type,'int32')
+                    v = typecast(self.intValue,'int32');
+                elseif strcmpi(self.type,'uint32')
+                    v = typecast(self.intValue,'uint32');
+                elseif strcmpi(self.type,'int16')
+                    v = typecast(uint16(self.intValue),'int16');
+                end
             else
                 tmp = uint64(0);
                 for nn=numel(self.regs):-1:2
@@ -149,7 +173,7 @@ classdef DeviceParameter < handle
                 tmp = tmp+uint64(self.regs(1).get(self.bits(1,:)));
                 self.intValue = tmp;
             end
-            self.value = self.fromInteger(double(self.intValue),varargin{:});
+            self.value = self.fromInteger(double(v),varargin{:});
             r = self.value;
         end
         
@@ -175,6 +199,17 @@ classdef DeviceParameter < handle
                 for nn=1:numel(self)
                     self(nn).write;
                 end
+            end
+        end
+        
+        function s = print(self,name,width,formatstr,units)
+            if nargin < 5
+                s = sprintf(['% ',num2str(width),'s: ',formatstr,'\n'],name,self.value);
+            else
+                s = sprintf(['% ',num2str(width),'s: ',formatstr,' %s\n'],name,self.value,units);
+            end
+            if nargout == 0
+                fprintf(1,s);
             end
         end
         

@@ -13,6 +13,8 @@ dev = DeviceControl(ip_addr);
 ```
 where `ip_addr` is the IP address of the Red Pitaya.  You can then fetch data using `dev.fetch` and upload data using `dev.upload`.  Refer to the code to see how this works.
 
+DAC outputs can be written using `dev.dac(<index>).set(<value>).write` where `<index>` is either 1 or 2 and `<value>` is a value in volts between -1 V and 1 V. 
+
 # Creating the project
 
 To create the project, clone the repository to a directory on your computer, open Vivado, navigate to the fpga/ directory (use `pwd` in the TCL console to determine your current directory and `cd` to navigate, just like in Bash), and then run `source make-project.tcl <project name>` where `<project name>` is the name you want your Vivado project to have.  This should create the project with no errors.  It may not correctly assign the AXI addresses, so you will need to open the address editor and assign the `PS7/AXI_Parse_0/s_axi` interface the address range `0x4000_000` to `0x7fff_ffff`.

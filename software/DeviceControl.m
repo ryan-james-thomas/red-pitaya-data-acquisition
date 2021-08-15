@@ -7,13 +7,14 @@ classdef DeviceControl < handle
     
     properties(SetAccess = immutable)
         conn
-        
+        dac
     end
     
     properties(SetAccess = protected)
         % R/W registers
         trigReg
         topReg
+        dacReg
     end
     
     properties(Constant)
@@ -22,8 +23,9 @@ classdef DeviceControl < handle
         INIT_CIC_RATE = 1;
         DDS_WIDTH = 27;
         DAC_WIDTH = 14;
-        CONV_LV = 1.1851;
-        CONV_HV = 29.3570;
+        ADC_WIDTH = 14;
+        CONV_LV = 1.1851/2^(DeviceControl.DAC_WIDTH - 1);
+        CONV_HV = 29.3570/2^(DeviceControl.DAC_WIDTH - 1);
     end
     
     methods
@@ -34,16 +36,26 @@ classdef DeviceControl < handle
                 self.conn = ConnectionClient(self.HOST_ADDRESS);
             end
             
-            self.jumpers = 'hv';
+            self.jumpers = 'lv';
             
             % R/W registers
             self.trigReg = DeviceRegister('0',self.conn);
             self.topReg = DeviceRegister('4',self.conn);
+            self.dacReg = DeviceRegister('8',self.conn);
             
+            
+            self.dac = DeviceParameter([0,15],self.dacReg,'int16')...
+                .setLimits('lower',-1,'upper',1)...
+                .setFunctions('to',@(x) self.convert2int(x),'from',@(x) self.convert2volts(x));
+            
+            self.dac(2) = DeviceParameter([16,31],self.dacReg,'int16')...
+                .setLimits('lower',-1,'upper',1)...
+                .setFunctions('to',@(x) self.convert2int(x),'from',@(x) self.convert2volts(x));
         end
         
         function self = setDefaults(self,varargin)
-            
+            self.dac(1).set(0);
+            self.dac(2).set(0);
         end
         
         function self = check(self)
@@ -53,11 +65,35 @@ classdef DeviceControl < handle
         function self = upload(self)
             self.check;
             self.topReg.write;
+            self.dacReg.write;
         end
         
         function self = fetch(self)
             %Read registers
             self.topReg.read;
+            self.dacReg.read;
+            
+            for nn = 1:numel(self.dac)
+                self.dac(nn).get;
+            end
+        end
+        
+        function r = convert2volts(self,x)
+            if strcmpi(self.jumpers,'hv')
+                c = self.CONV_HV;
+            elseif strcmpi(self.jumpers,'lv')
+                c = self.CONV_LV;
+            end
+            r = x*c;
+        end
+        
+        function r = convert2int(self,x)
+            if strcmpi(self.jumpers,'hv')
+                c = self.CONV_HV;
+            elseif strcmpi(self.jumpers,'lv')
+                c = self.CONV_LV;
+            end
+            r = x/c;
         end
         
         function self = getData(self,numSamples)
@@ -74,14 +110,14 @@ classdef DeviceControl < handle
         end
         
         function disp(self)
-            strwidth = 36;
+            strwidth = 20;
             fprintf(1,'SlowAcquisition object with properties:\n');
             fprintf(1,'\t Registers\n');
             self.topReg.makeString('topReg',strwidth);
             fprintf(1,'\t ----------------------------------\n');
             fprintf(1,'\t Parameters\n');
-            % fprintf(1,'\t\t%25s: %d\n','CIC Rate (log2)',self.cicRate.value);
-            % fprintf(1,'\t\t%25s: %.3g\n','Freq [Hz]',self.freq.value);
+            self.dac(1).print('DAC 1',strwidth,'%.3f');
+            self.dac(2).print('DAC 2',strwidth,'%.3f');
         end
         
         
