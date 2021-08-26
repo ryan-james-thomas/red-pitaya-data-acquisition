@@ -27,10 +27,6 @@ constant DAC_WIDTH          :   natural :=  16;
 constant NUM_DACS           :   natural :=  2;
 subtype t_dac is signed(DAC_WIDTH-1 downto 0);
 type t_dac_array is array(NUM_DACS - 1 downto 0) of t_dac;
---
--- Defines PID gain types
---
-constant PID_WIDTH          :   natural :=  16;
 
 --
 -- Defines AXI address and data widths
