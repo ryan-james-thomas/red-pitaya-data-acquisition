@@ -1,6 +1,6 @@
 # Use
 
-This is a bare-bones Vivado project for the Red-Pitaya/STEMlab boards.  It is meant to be a starting point for custom desigs with the Red Pitaya.  HDL code is written in VHDL, and it includes modules for reading from the ADCs and writing to the DACs as well as a simplified interface for reading/writing to the device via the AXI interface.
+This is a bare-bones Vivado project for the Red-Pitaya/STEMlab boards.  It is meant to be a starting point for custom designs with the Red Pitaya.  HDL code is written in VHDL, and it includes modules for reading from the ADCs and writing to the DACs as well as a simplified interface for reading/writing to the device via the AXI interface.
 
 Included in the software directory is some Python code that can be run from the command line on the Red Pitaya which will start a simple TCP/IP socket server that can be used to send and receive data from a remote computer.  First edit the shell script `get_ip.sh` so that it picks out the correct IP address, change its permissions so it can be executed (you may need to install dos2unix using `apt install dos2unix` and then run `dos2unix get_ip.sh` to make it work), and then spin up the server using
 ```

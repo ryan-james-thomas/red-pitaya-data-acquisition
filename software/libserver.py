@@ -12,9 +12,12 @@ class Message:
         self.selector = selector
         self.sock = sock
         self.addr = addr
+        self.keep_alive = False
+        self._reset()
+
+    def _reset(self):
         self._recv_buffer = b""
         self._send_buffer = b""
-        self.read_serial = None
         self.header_len = None
         self.header = None
         self.msg_len = None
@@ -32,7 +35,6 @@ class Message:
         elif mode == "rw" or mode == "wr":
             events = selectors.EVENT_WRITE | selectors.EVENT_READ
         else:
-            # raise ValueError(f"Invalid events mask mode {repr(mode)}.")
             raise ValueError("Invalid events mask mode {}".format(repr(mode)))
         self.selector.modify(self.sock,events,data=self)
 
@@ -67,7 +69,11 @@ class Message:
                 print("Bytes sent: %d, Bytes Remaining: %d" % (sent, len(self._send_buffer)))
                 #Close when the buffer is empty - binary data is true if not empty
                 if sent and not self._send_buffer:
-                    self.close()
+                    if self.keep_alive:
+                        self._set_selector_events_mask("r")
+                        self._reset()
+                    else:
+                        self.close()
 
     def read(self):
         #This function is called repeatedly by socket event loop. Processes header and message data
@@ -100,8 +106,7 @@ class Message:
         try:
             self.selector.unregister(self.sock)
         except Exception as e:
-            # print(f"Error: selector.unregister() exception for",f"{self.addr}: {repr(e)}")
-            print("Errpr: selector.unregister() exception for {}: {}".format(self.addr,repr(e)))
+            print("Error: selector.unregister() exception for {}: {}".format(self.addr,repr(e)))
         finally:
             #Delete reference to socket object for garbage collection
             self.sock = None
@@ -117,10 +122,13 @@ class Message:
     def process_header(self):
         #This function processes the header
         if len(self._recv_buffer) >= self.header_len:
-            # print("Header is",self._recv_buffer[:hdr_len])
-            # hdr = int.from_bytes(struct.unpack("<c",self._recv_buffer[:1])[0],'little')
             self.header = json.loads(self._recv_buffer[:self.header_len].decode('ascii'))
             self.msg_len = 4*self.header["length"]
+
+            if ("keep_alive" in self.header):
+                self.keep_alive = self.header["keep_alive"]
+            else:
+                self.keep_alive = False
 
             print("Header:")
             print(self.header)
@@ -149,7 +157,6 @@ class Message:
     def create_response(self):
         self.fpga_response["length"] = 4*len(self.fpga_response["data"])
         data = self.fpga_response.pop("data");#self.fpga_response["data"]
-        # del(self.fpga_response["data"])
         json_str = json.dumps(self.fpga_response)
         print(json_str)
         tmp = json_str.encode('ascii')

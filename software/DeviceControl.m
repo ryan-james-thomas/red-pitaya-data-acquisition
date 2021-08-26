@@ -111,7 +111,7 @@ classdef DeviceControl < handle
         
         function disp(self)
             strwidth = 20;
-            fprintf(1,'SlowAcquisition object with properties:\n');
+            fprintf(1,'DeviceControl object with properties:\n');
             fprintf(1,'\t Registers\n');
             self.topReg.makeString('topReg',strwidth);
             fprintf(1,'\t ----------------------------------\n');
@@ -152,7 +152,7 @@ classdef DeviceControl < handle
                 mm = mm + 1;
             end
 
-            v = double(d)/2^(DeviceControl.DAC_WIDTH-1)*c;
+            v = double(d)*c;
         end
     end
     
