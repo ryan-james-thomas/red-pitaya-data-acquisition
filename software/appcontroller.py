@@ -1,9 +1,5 @@
-# from bitstring import BitArray
-# import serial
-import time
-import types
 import subprocess
-import warnings
+import struct
 
 MEM_ADDR = 0x40000000
 
@@ -37,11 +33,18 @@ def write(data,header):
             else:
                 data_o.append(result.stdout.decode('ascii').rstrip())
 
-    elif header["mode"] == "get scan data":
-        if header["reset"]:
-            cmd = ['./saveScanData','-rn',format(header["numSamples"])]
-        else:
-            cmd = ['./saveScanData','-n',format(header["numSamples"])]
+    elif header["mode"] == "fetch data":
+        cmd = ['./fetchData',format(header["numSamples"])]
+        if ("print" in header) and (header["print"]):
+            print("Command: ",cmd)
+        result = subprocess.run(cmd,stdout=subprocess.PIPE)
+
+        if result.returncode == 0:
+            data_o = result.stdout.decode('ascii').rstrip().split("\n")
+
+
+    elif header["mode"] == "save data":
+        cmd = ['./saveData',header["saveType"],'-n',format(header["numSamples"])]
 
         if ("print" in header) and (header["print"]):
             print("Command: ",cmd)
@@ -49,6 +52,13 @@ def write(data,header):
 
         if result.returncode == 0:
             data_o = result.stdout.decode('ascii').rstrip().split("\n")
+
+    elif header["mode"] == "get file":
+        f = open("SavedData.bin","rb")
+        data_o = f.read()
+        f.close()
+        response = {"err":False,"errMsg":"","data":data_o}
+        return response
     
     
     if result.returncode != 0:

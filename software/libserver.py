@@ -155,15 +155,20 @@ class Message:
 
     
     def create_response(self):
-        self.fpga_response["length"] = 4*len(self.fpga_response["data"])
-        data = self.fpga_response.pop("data");#self.fpga_response["data"]
+        data = self.fpga_response.pop("data")
+        if isinstance(data,bytes):
+            self.fpga_response["length"] = len(data)
+        else:
+            self.fpga_response["length"] = 4*len(data)
         json_str = json.dumps(self.fpga_response)
         print(json_str)
         tmp = json_str.encode('ascii')
         self._send_buffer = struct.pack("<H",len(tmp)) + tmp
-        for d in data:
-            # print(format(int(d,16)))
-            self._send_buffer += struct.pack("<I",int(d,16))
+        if isinstance(data,bytes):
+            self._send_buffer += data
+        else:
+            for d in data:
+                self._send_buffer += struct.pack("<I",int(d,16))
         self.response_created = True
         
 

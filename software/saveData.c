@@ -1,29 +1,29 @@
 //These are libraries which contain useful functions
+#include <ctype.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/mman.h>
 #include <fcntl.h>
-#include <stdlib.h>
 #include <math.h>
 #include <time.h>
 
 #define MAP_SIZE 262144UL
-#define MEM_LOC 0x40000000
-#define DATA_LOC 0x0000000C
-#define FIFO_LOC 0x00000008
+#define MEM_LOC  0x40000000
+#define FIFO_REG 0x0000001C
+#define FIFO_LOC 0x00000020
  
 int main(int argc, char **argv)
 {
-  int fd;		//File identifier
-  int numSamples;	//Number of samples to collect
-  int dataSize;   //Size of actual data array
-  void *cfg;		//A pointer to a memory location.  The * indicates that it is a pointer - it points to a location in memory
+  int fd;		                //File identifier
+  int numSamples;	          //Number of samples to collect
+  void *cfg;		            //A pointer to a memory location.  The * indicates that it is a pointer - it points to a location in memory
   char *name = "/dev/mem";	//Name of the memory resource
 
   uint32_t i, incr = 0;
   uint8_t saveType = 0;
+  uint8_t debugflag = 0;
   uint32_t tmp;
   uint32_t *data;
   FILE *ptr;
@@ -31,27 +31,52 @@ int main(int argc, char **argv)
   clock_t start, stop;
 
 
-/*The following if-else statement parses the input arguments.
-argc is the number of arguments.  argv is a 2D array of characters.
-argv[0] is the function name, and argv[n] is the n'th input argument*/
-  if (argc == 2) {
-    numSamples = atoi(argv[1]);	//atof converts the character array argv[1] to a floating point number
-    saveType = 0;
-  } else if (argc == 3) {
-    numSamples = atoi(argv[1]);	//atof converts the character array argv[1] to a floating point number
-    saveType = atoi(argv[2]);;
-  } else {
-    printf("You must supply at least one argument!\n");
-    return 0;
+  /*
+   * Parse the input arguments
+   */
+  int c;
+  while ((c = getopt(argc,argv,"n:tmfd")) != -1) {
+    switch (c) {
+      case 'n':
+        numSamples = atoi(optarg);
+        break;
+      case 't':
+        //Transmit data back along TCP
+        saveType = 0;
+        break;
+      case 'm':
+        //Save data into memory, then save to file
+        saveType = 1;
+        break;
+      case 'f':
+        //Save data to file directly
+        saveType = 2;
+        break;
+      case 'd':
+        //Debugging/printing flag
+        debugflag = 1;
+        break;
+
+      case '?':
+        if (isprint (optopt))
+            fprintf (stderr, "Unknown option `-%c'.\n", optopt);
+        else
+            fprintf (stderr,
+                    "Unknown option character `\\x%x'.\n",
+                    optopt);
+        return 1;
+
+      default:
+        abort();
+        break;
+    }
   }
 
-  // printf("Save factor: %d\n",saveFactor);
-  dataSize = numSamples;
-
   if (saveType == 2) {
+    //Clear file and open for writing if saving to file directly
     ptr = fopen("SavedData.bin","wb");
   } else {
-    data = (uint32_t *) malloc(dataSize * sizeof(uint32_t));
+    data = (uint32_t *) malloc(numSamples * sizeof(uint32_t));
     if (!data) {
       printf("Error allocating memory");
       return -1;
@@ -66,38 +91,48 @@ argv[0] is the function name, and argv[n] is the n'th input argument*/
   }
 
   /*mmap maps the memory location 0x40000000 to the pointer cfg, which "points" to that location in memory.*/
-//  cfg = mmap(0,MAP_SIZE,PROT_READ|PROT_WRITE,MAP_SHARED,fd,MEM_LOC);
   cfg = mmap(0,MAP_SIZE,PROT_READ|PROT_WRITE,MAP_SHARED,fd,MEM_LOC);
-
-  //Disable FIFO
-  *((uint32_t *)(cfg + FIFO_LOC)) = 0;
-//  printf("FIFO Disabled!\n");
-  //Reset FIFO
-  *((uint32_t *)(cfg + 0)) = (1 << 2);
-//  printf("FIFO Reset!\n");
-  usleep(1000);
-  //Enable FIFO
-  *((uint32_t *)(cfg + FIFO_LOC)) = 1;
-//  printf("FIFO Enabled!\n");
-  //Record data
+  /*
+   * Disable FIFO and then reset
+   */
+  *((uint32_t *)(cfg + FIFO_REG)) = 0;
+  *((uint32_t *)(cfg + FIFO_REG)) = 2;
+  *((uint32_t *)(cfg + FIFO_REG)) = 0;
+  usleep(1);
+  /*
+   * Enable FIFO and record data
+   */
+  *((uint32_t *)(cfg + FIFO_REG)) = 1;
   if (saveType == 1 | saveType == 2) {
+    /*
+     * These save types don't write to standard out,
+     * so they can print debugging information
+     */
     start = clock();
   }
   
   if (saveType != 2) {
-    for (i = 0;i<dataSize;i++) {
-      *(data + i) = *((uint32_t *)(cfg + DATA_LOC));
+    /*
+     * Save data to a memory location
+     */
+    for (i = 0;i<numSamples;i++) {
+      *(data + i) = *((uint32_t *)(cfg + FIFO_LOC));
     }
   } else {
-    for (i = 0;i<dataSize;i++) {
-        tmp = *((uint32_t *)(cfg + DATA_LOC));
+    /*
+     * Save data directly to file
+     */
+    for (i = 0;i<numSamples;i++) {
+        tmp = *((uint32_t *)(cfg + FIFO_LOC));
         fwrite(&tmp,4,1,ptr);
     }
   }
   
-  //Disable FIFO
-  *((uint32_t *)(cfg + FIFO_LOC)) = 0;
-  if (saveType == 1 | saveType == 2) {
+  /*
+   * Disable FIFO and print debugging information
+   */
+  *((uint32_t *)(cfg + FIFO_REG)) = 0;
+  if ((saveType == 1 | saveType == 2) & (debugflag == 1)) {
     stop = clock();
     printf("FIFO Disabled!\n");
     printf("Execution time: %.3f ms\n",(double)(stop - start)/CLOCKS_PER_SEC*1e3);
@@ -105,13 +140,13 @@ argv[0] is the function name, and argv[n] is the n'th input argument*/
   }
 
   if (saveType == 0) {
-    for (i = 0;i<dataSize;i++) {
+    for (i = 0;i<numSamples;i++) {
         printf("%08x\n",*(data + i));
     }
     free(data);
   } else if (saveType == 1) {
     ptr = fopen("SavedData.bin","wb");
-    fwrite(data,4,(size_t)(dataSize),ptr);
+    fwrite(data,4,(size_t)(numSamples),ptr);
     fclose(ptr);
     free(data);
   } else if (saveType == 2) {
