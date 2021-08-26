@@ -174,9 +174,9 @@ axi_data <= (0  =>  triggers,
              2  =>  fastFiltReg,
              3  =>  delay,
              4  =>  numSamples,
-             5  =>  slowFiltRegg);
+             5  =>  slowFiltReg);
 
-adcData_i <= m_axis_tdata;
+adcData_i <= X"000a_f000";
 
 
 main_proc: process is
@@ -191,7 +191,7 @@ begin
     triggers <= (others => '0');
     topReg <= (0 => '1', others => '0');
     fastFiltReg <= (others => '0');
-    delay <= std_logic_vector(to_unsigned(100,delay'length));
+    delay <= std_logic_vector(to_unsigned(10,delay'length));
     numSamples <= std_logic_vector(to_unsigned(10,numSamples'length));
     slowFiltReg <= X"0000_0004";
     
@@ -200,7 +200,7 @@ begin
     start_single_i <= "00";
     wait for 200 ns;
     aresetn <= '1';
-    wait for 100 ns;
+    wait for 500 ns;
     --
     -- Start AXI transfer
     --
@@ -209,7 +209,31 @@ begin
     wait until rising_edge(sysclk);
     startAXI <= '0';
     wait for 2 us;
-    
+    --
+    -- Reset FIFO
+    --
+    wait until rising_edge(sysclk);
+    axi_addr_single <= (others => '0');
+    axi_data_single <= (0 => '0', 1 => '1', others => '0');
+    start_single_i <= "01";
+    wait until bus_s.resp(0) = '1';
+    start_single_i <= "00";
+    wait for 1 us;
+    wait until rising_edge(sysclk);
+    axi_addr_single <= (others => '0');
+    axi_data_single <= (0 => '1', 1 => '0', others => '0');
+    start_single_i <= "01";
+    wait until bus_s.resp(0) = '1';
+    start_single_i <= "00";
+    wait for 1 us;
+    wait until rising_edge(sysclk);
+    axi_addr_single <= (others => '0');
+    axi_data_single <= (0 => '1', 1 => '0', others => '0');
+    start_single_i <= "01";
+    wait until bus_s.resp(0) = '1';
+    start_single_i <= "00";
+    wait for 1 us;
+
 
     wait;
 end process; 

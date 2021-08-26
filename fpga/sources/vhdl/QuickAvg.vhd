@@ -36,7 +36,7 @@ constant EXT_WIDTH  :   natural :=  ADC_WIDTH + PADDING;
 -- Parameters
 --
 signal log2Avgs     :   natural range 0 to 31   :=  0;
-signal numAvgs      :   unsigned(31 downto 0)   :=  to_unsigned(1,16);
+signal numAvgs      :   unsigned(31 downto 0)   :=  to_unsigned(1,32);
 --
 -- Counter for averaging
 --
@@ -52,7 +52,6 @@ begin
 --
 log2Avgs <= to_integer(unsigned(reg_i(4 downto 0)));
 numAvgs <= shift_left(to_unsigned(1,numAvgs'length),log2Avgs);
-delay <= unsigned(reg_i(31 downto 5));
 --
 -- Split input signal into the two channels as signed integers
 --

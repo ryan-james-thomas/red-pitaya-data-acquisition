@@ -80,6 +80,20 @@ component FIFOHandler is
     );
 end component;
 
+component SaveADCData is
+    port(
+        readClk     :   in  std_logic;          --Clock for reading data
+        writeClk    :   in  std_logic;          --Clock for writing data
+        aresetn     :   in  std_logic;          --Asynchronous reset
+        
+        data_i      :   in  std_logic_vector;   --Input data, maximum length of 32 bits
+        valid_i     :   in  std_logic;          --High for one clock cycle when data_i is valid
+        
+        bus_m       :   in  t_mem_bus_master;   --Master memory bus
+        bus_s       :   out t_mem_bus_slave     --Slave memory bus
+    );
+end component;
+
 --
 -- AXI communication signals
 --
@@ -99,9 +113,9 @@ signal slowFiltReg          :   t_param_reg;
 --
 -- ADC signals
 --
-signal adc_i            :   t_adc_array(1 downto 0);
-signal adc_f            :   t_adc_array(1 downto 0);
-signal adc_s            :   t_adc_array(1 downto 0);
+signal adc_i            :   t_adc_array;
+signal adc_f            :   t_adc_array;
+signal adc_s            :   t_adc_array;
 signal valid_f, valid_s :   std_logic;
 --
 -- Memory signals
@@ -126,10 +140,13 @@ signal trigHoldOff  :   unsigned(31 downto 0);
 --
 -- FIFO signals
 --
+signal fifoReg      :   t_param_reg;
 signal fifoReset    :   std_logic;
 signal fifo_m       :   t_fifo_bus_master;
 signal fifo_s       :   t_fifo_bus_slave;
 signal fifo_i       :   std_logic_vector(FIFO_WIDTH - 1 downto 0);
+signal validFifo_i  :   std_logic;
+signal enableSlow   :   std_logic;
 
 begin
 --
@@ -137,6 +154,7 @@ begin
 --
 m_axis_tdata <= dac_o;
 m_axis_tvalid <= '1';
+ext_o <= (others => '0');
 --
 -- Create ADC data
 --
@@ -172,6 +190,8 @@ begin
                 enableSave <= '0';
                 if (trigEdge = '0' and trigSync = "10") or (trigEdge = '1' and trigSync = "01") or triggers(0) = '1' then
                     delayState <= X"1";
+                    memReset <= '1';
+                elsif reset = '1' then
                     memReset <= '1';
                 else
                     memReset <= '0';
@@ -238,12 +258,13 @@ port map(
 --
 -- Filter data for slow acquisition using FIFO
 --
+enableSlow <= fifoReg(0);
 SlowAvg: QuickAvg
 port map(
     clk         =>  adcClk,
     aresetn     =>  aresetn,
     reg_i       =>  slowFiltReg,
-    enable_i    =>  '1',
+    enable_i    =>  enableSlow,
     adc_i       =>  adc_i,
     valid_i     =>  '1',
     adc_o       =>  adc_s,
@@ -253,7 +274,7 @@ port map(
 -- Save data into FIFO
 --
 fifo_i <= std_logic_vector(adc_s(1)) & std_logic_vector(adc_s(0));
-fifoReset <= triggers(1);
+fifoReset <= fifoReg(1);
 SlowFIFO: FIFOHandler
 port map(
     wr_clk      =>  adcClk,
@@ -287,6 +308,13 @@ begin
         numSamples <= (0 => '1', others => '0');
         fastFiltReg <= (others => '0');
         slowFiltReg <= (others => '0');
+        fifo_m <= INIT_FIFO_BUS_MASTER;
+        fifoReg <= (others => '0');
+        mem_bus_m.trig <= '0';
+        mem_bus_m.addr <= (others => '0');
+        mem_bus_m.status <= idle;
+        
+        trigHoldOff <= (others => '0');
         
     elsif rising_edge(sysClk) then
         FSM: case(comState) is
@@ -318,7 +346,17 @@ begin
                             when X"00000C" => rw(bus_m,bus_s,comState,delay);
                             when X"000010" => rw(bus_m,bus_s,comState,numSamples);
                             when X"000014" => rw(bus_m,bus_s,comState,slowFiltReg);
-                            
+                            when X"000018" => rw(bus_m,bus_s,comState,dac_o);
+                            --
+                            -- FIFO data
+                            --
+                            when X"00001C" => rw(bus_m,bus_s,comState,fifoReg);
+                            when X"000020" => fifoRead(bus_m,bus_s,comState,fifo_m,fifo_s);
+                            --
+                            -- Read-only cases
+                            --
+                            when X"000024" => readOnly(bus_m,bus_s,comState,mem_bus_s.last);
+                            when X"000028" => rw(bus_m,bus_s,comState,trigHoldOff);
                             
                             when others => 
                                 comState <= finishing;
@@ -327,14 +365,13 @@ begin
                     --
                     -- Read only cases
                     --
-                    when X"01" =>
-                        ParamCaseReadOnly: case(bus_m.addr(23 downto 0)) is
-                            when X"000000" => readOnly(bus_m,bus_s,comState,mem_bus_s.last);
-                            when X"000004" => fifoRead(bus_m,bus_s,comState,fifo_m,fifo_s);
-                            when others => 
-                                comState <= finishing;
-                                bus_s.resp <= "11";
-                        end case;
+--                    when X"01" =>
+--                        ParamCaseReadOnly: case(bus_m.addr(23 downto 0)) is
+--                            when X"000000" => readOnly(bus_m,bus_s,comState,mem_bus_s.last);
+--                            when others => 
+--                                comState <= finishing;
+--                                bus_s.resp <= "11";
+--                        end case;
                     --
                     -- Memory reading
                     --
