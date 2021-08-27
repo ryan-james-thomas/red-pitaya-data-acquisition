@@ -24,7 +24,7 @@ classdef DataAcquisition < handle
         numSamplesReg   %Number of samples register for fast acquisition
         slowFiltReg     %Slow-filtering register
         dacReg          %DAC output register
-        lastSampleReg   %Last sample register
+        lastSample      %Last sample register
         holdOffReg      %Tigger hold off register
     end
     
@@ -79,7 +79,7 @@ classdef DataAcquisition < handle
             self.numSamplesReg = DeviceRegister('10',self.conn);
             self.slowFiltReg = DeviceRegister('14',self.conn);
             self.dacReg = DeviceRegister('18',self.conn);
-            self.lastSampleReg = DeviceRegister('24',self.conn);
+            self.lastSample = DeviceRegister('24',self.conn);
             self.holdOffReg = DeviceRegister('28',self.conn);
             %
             % Fast-filtering parameters
@@ -240,9 +240,9 @@ classdef DataAcquisition < handle
             
             if nargin < 2
                 self.conn.keepAlive = true;
-                self.lastSampleReg.read;
+                self.lastSample.read;
                 self.conn.keepAlive = false;
-                numSamples = self.lastSampleReg.value;
+                numSamples = self.lastSample.value;
             end
             self.conn.write(0,'mode','fetch data','numSamples',numSamples);
             raw = typecast(self.conn.recvMessage,'uint8');
