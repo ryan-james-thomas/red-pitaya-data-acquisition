@@ -39,7 +39,7 @@ root@rp-f0919a:~# ip addr
 ```
 In this case the one we want is the address `192.168.1.109`.  In this case, `get_ip.sh` will work because it looks for an IP address starting with `192.168`.  If your IP address starts with something else, you will need to edit the `get_ip.sh` file and change the numbers to reflect your particular network.
 
-Finally, compile the C programs `saveData.c` and `fetchData.c` using `gcc -o saveData saveData.c` and `gcc -o fetchData fetchData.c`.  These will automatically be executable.
+Finally, compile the C programs `fetchRAM.c` and `fetchFIFO.c` using `gcc -o fetchRAM fetchRAM.c` and `gcc -o fetchFIFO fetchFIFO.c`.  These will automatically be executable.
 
 ### After a reboot or power-on
 
@@ -118,7 +118,7 @@ dev.delay.write();
 dev.delay.read();
 ```
 
-Data acquired using the fast method can be read from the device using the `fetchData()` method.  When no arguments are supplied it will fetch all data that has been acquired in the last acquisition according to the property `lastSample`.  Otherwise, you can specify the number of samples using `fetchData(N)` where `N` is the number of samples.  Here's an example:
+Data acquired using the fast method can be read from the device using the `getRAM()` method.  When no arguments are supplied it will fetch all data that has been acquired in the last acquisition according to the property `lastSample`.  Otherwise, you can specify the number of samples using `getRAM(N)` where `N` is the number of samples.  Here's an example:
 ```
 %Set parameters
 dev.log2AvgsFast.set(0);
@@ -131,31 +131,31 @@ dev.upload();
 %Trigger acquisition
 dev.start();
 %Get data
-dev.fetchData();    %Fetch all data on the device
+dev.getRAM();    %Fetch all data on the device
 %OR
-dev.fetchData(1000);%Fetch 1000 samples
+dev.getRAM(1000);%Fetch 1000 samples
 %Plot data
 plot(dev.t,dev.data,'.-');
 ```
 
-You can acquire data through the slow method using the `saveData()` method.  For this method, you supply the number of samples that you want to record.  I suggest making sure that the number of samples and the sampling rate are such that data acquisition is less than 10 s, otherwise the TCP/IP connection will time out.  Also, keep the number of samples below about 20,000 because it takes a long time to transfer more data.  Use this method like so:
+You can acquire data through the slow method using the `getFIFO()` method.  For this method, you supply the number of samples that you want to record.  Make sure that the time it takes to acquire the data is less than the connection timeout; the connection timeout can be accessed and set using `dev.conn.timeout`.  Use this method like so:
 ```
 dev.log2AvgsSlow.set(17);   %Sampling rate of about 1 kHz
-dev.saveData(1e4);  %Acquire 10 s worth of data
+dev.getFIFO(1e4);           %Acquire 10 s worth of data
 plot(dev.t,dev.data,'.-');
 ```
 
 # Direct control
 
-For longer data runs using the slow method, you should call the C programs directly on the device.  The program you want here is `saveData` which has the following syntax:
+For longer data runs using the slow method, you can call the C programs directly on the device.  The program you want here is `fetchFIFO` which has the following syntax:
 ```
-./saveData -fm -d -n <number of samples>
+./fetchFIFO -t <opt> -d -n <number of samples>
 ```
-The first set of options, `-f` or `-m`, specify how to store/save data as it is read from the FPGA.  `-m` tells the program to store data in memory as it is read from the device, while `-f` tells the program to save data directly to a file as it is read.  In principle, `-m` should be slightly faster.  Pick only one of these.
+The first option, `-t <opt>`, specifies how to save data from the device.  If running from the command line, use `<opt>` as either 1 or 2, where 1 stores data in memory first and then writes to file and 2 writes data directly to file.  In principle, storing in memory should be slightly faster.
 
 The `-d` option tells the program to print debugging information related to how long it takes to read data and the average time per read.  This can be useful if you want to know if the program is reading data faster than data is recorded on the device.
 
-The number of samples is set using the `-n` flag followed by the number of samples.  The number of samples has no limit except for either the amount of RAM on the chip (the `-m` option) or the storage capacity of the SD card (the `-f`) option.
+The number of samples is set using the `-n` flag followed by the number of samples.  The number of samples has no limit except for either the amount of memory on the chip (the `-t 1` option) or the storage capacity of the SD card (the `-t 2`) option.
 
 Data is saved to the file `SavedData.bin`.  Once you have transferred this to your computer using a file-transfer program like WinSCP (or `scp` from a terminal), you can read it into MATLAB using
 ```
