@@ -7,6 +7,7 @@ classdef ConnectionClient < handle
         port                %This is the TCP/IP port of the server
         keepAlive           %Tells the class to keep the connection alive (true/false)
         timeout             %Timeout for receiving data in seconds
+        debug               %Debugging flag
     end
     
     properties(SetAccess = protected)
@@ -56,6 +57,7 @@ classdef ConnectionClient < handle
 
             self.initRead;
             self.timeout = 20;
+            seld.debug = false;
         end
         
         function open(self)
@@ -177,6 +179,9 @@ classdef ConnectionClient < handle
                 % Tell the server to keep the connection alive
                 %
                 msghdr.keep_alive = self.keepAlive;
+                if self.debug
+                    msghdr.print = true;
+                end
                 %
                 % Initialize the read variables
                 self.initRead;

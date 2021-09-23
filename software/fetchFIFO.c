@@ -22,7 +22,7 @@ int main(int argc, char **argv)
   char *name = "/dev/mem";	//Name of the memory resource
 
   uint32_t i, incr = 0;
-  uint8_t saveType = 0;
+  uint8_t saveType = 1;
   uint8_t debugflag = 0;
   uint32_t tmp;
   uint32_t *data;
@@ -35,22 +35,18 @@ int main(int argc, char **argv)
    * Parse the input arguments
    */
   int c;
-  while ((c = getopt(argc,argv,"n:tmfd")) != -1) {
+  while ((c = getopt(argc,argv,"n:t:d")) != -1) {
     switch (c) {
       case 'n':
         numSamples = atoi(optarg);
         break;
       case 't':
-        //Transmit data back along TCP
-        saveType = 0;
-        break;
-      case 'm':
-        //Save data into memory, then save to file
-        saveType = 1;
-        break;
-      case 'f':
-        //Save data to file directly
-        saveType = 2;
+        /*
+         * Save data to command line and transmit back along TCP (0).
+         * or save data into memory first then to file (1)
+         * or save directly to file (2)
+         */
+        saveType = atoi(optarg);
         break;
       case 'd':
         //Debugging/printing flag
@@ -134,7 +130,6 @@ int main(int argc, char **argv)
   *((uint32_t *)(cfg + FIFO_REG)) = 0;
   if ((saveType == 1 | saveType == 2) & (debugflag == 1)) {
     stop = clock();
-    printf("FIFO Disabled!\n");
     printf("Execution time: %.3f ms\n",(double)(stop - start)/CLOCKS_PER_SEC*1e3);
     printf("Time per read: %.3f us\n",(double)(stop - start)/CLOCKS_PER_SEC/(double)(numSamples)*1e6);
   }

@@ -286,7 +286,7 @@
           "util_ds_buf_1": {
             "vlnv": "xilinx.com:ip:util_ds_buf:2.1",
             "xci_name": "system_util_ds_buf_1_0",
-            "xci_path": "ip\\system_util_ds_buf_1_0\\system_util_ds_buf_1_0.xci",
+            "xci_path": "ip/system_util_ds_buf_1_0/system_util_ds_buf_1_0.xci",
             "inst_hier_path": "Utility_Buffers/util_ds_buf_1",
             "parameters": {
               "C_SIZE": {
@@ -297,7 +297,7 @@
           "util_ds_buf_2": {
             "vlnv": "xilinx.com:ip:util_ds_buf:2.1",
             "xci_name": "system_util_ds_buf_2_0",
-            "xci_path": "ip\\system_util_ds_buf_2_0\\system_util_ds_buf_2_0.xci",
+            "xci_path": "ip/system_util_ds_buf_2_0/system_util_ds_buf_2_0.xci",
             "inst_hier_path": "Utility_Buffers/util_ds_buf_2",
             "parameters": {
               "C_BUF_TYPE": {
@@ -398,7 +398,7 @@
           "processing_system7_0": {
             "vlnv": "xilinx.com:ip:processing_system7:5.5",
             "xci_name": "system_processing_system7_0_0",
-            "xci_path": "ip\\system_processing_system7_0_0\\system_processing_system7_0_0.xci",
+            "xci_path": "ip/system_processing_system7_0_0/system_processing_system7_0_0.xci",
             "inst_hier_path": "PS7/processing_system7_0",
             "parameters": {
               "PCW_ACT_APU_PERIPHERAL_FREQMHZ": {
@@ -2243,7 +2243,7 @@
           "axi_protocol_convert_0": {
             "vlnv": "xilinx.com:ip:axi_protocol_converter:2.1",
             "xci_name": "system_axi_protocol_convert_0_0",
-            "xci_path": "ip\\system_axi_protocol_convert_0_0\\system_axi_protocol_convert_0_0.xci",
+            "xci_path": "ip/system_axi_protocol_convert_0_0/system_axi_protocol_convert_0_0.xci",
             "inst_hier_path": "PS7/axi_protocol_convert_0",
             "parameters": {
               "MI_PROTOCOL": {
@@ -2262,7 +2262,7 @@
           "AXI_Parse_0": {
             "vlnv": "xilinx.com:module_ref:AXI_Parse:1.0",
             "xci_name": "system_AXI_Parse_0_0",
-            "xci_path": "ip\\system_AXI_Parse_0_0\\system_AXI_Parse_0_0.xci",
+            "xci_path": "ip/system_AXI_Parse_0_0/system_AXI_Parse_0_0.xci",
             "inst_hier_path": "PS7/AXI_Parse_0",
             "reference_info": {
               "ref_type": "hdl",
@@ -2532,7 +2532,7 @@
           "proc_sys_reset_0": {
             "vlnv": "xilinx.com:ip:proc_sys_reset:5.0",
             "xci_name": "system_proc_sys_reset_0_0",
-            "xci_path": "ip\\system_proc_sys_reset_0_0\\system_proc_sys_reset_0_0.xci",
+            "xci_path": "ip/system_proc_sys_reset_0_0/system_proc_sys_reset_0_0.xci",
             "inst_hier_path": "PS7/proc_sys_reset_0"
           }
         },
@@ -2543,10 +2543,10 @@
               "processing_system7_0/DDR"
             ]
           },
-          "processing_system7_0_M_AXI_GP0": {
+          "axi_protocol_convert_0_M_AXI": {
             "interface_ports": [
-              "processing_system7_0/M_AXI_GP0",
-              "axi_protocol_convert_0/S_AXI"
+              "axi_protocol_convert_0/M_AXI",
+              "AXI_Parse_0/s_axi"
             ]
           },
           "Conn1": {
@@ -2555,10 +2555,10 @@
               "processing_system7_0/FIXED_IO"
             ]
           },
-          "axi_protocol_convert_0_M_AXI": {
+          "processing_system7_0_M_AXI_GP0": {
             "interface_ports": [
-              "axi_protocol_convert_0/M_AXI",
-              "AXI_Parse_0/s_axi"
+              "processing_system7_0/M_AXI_GP0",
+              "axi_protocol_convert_0/S_AXI"
             ]
           }
         },
@@ -2664,7 +2664,7 @@
           "AXIS_Red_Pitaya_DAC_0": {
             "vlnv": "xilinx.com:module_ref:AXIS_Red_Pitaya_DAC:1.0",
             "xci_name": "system_AXIS_Red_Pitaya_DAC_0_0",
-            "xci_path": "ip\\system_AXIS_Red_Pitaya_DAC_0_0\\system_AXIS_Red_Pitaya_DAC_0_0.xci",
+            "xci_path": "ip/system_AXIS_Red_Pitaya_DAC_0_0/system_AXIS_Red_Pitaya_DAC_0_0.xci",
             "inst_hier_path": "DAC_Output/AXIS_Red_Pitaya_DAC_0",
             "reference_info": {
               "ref_type": "hdl",
@@ -2804,7 +2804,7 @@
           "clk_wiz_0": {
             "vlnv": "xilinx.com:ip:clk_wiz:6.0",
             "xci_name": "system_clk_wiz_0_0",
-            "xci_path": "ip\\system_clk_wiz_0_0\\system_clk_wiz_0_0.xci",
+            "xci_path": "ip/system_clk_wiz_0_0/system_clk_wiz_0_0.xci",
             "inst_hier_path": "DAC_Output/clk_wiz_0",
             "parameters": {
               "CLKIN1_JITTER_PS": {
@@ -2900,7 +2900,7 @@
       "AXIS_Red_Pitaya_ADC_0": {
         "vlnv": "xilinx.com:module_ref:AXIS_Red_Pitaya_ADC:1.0",
         "xci_name": "system_AXIS_Red_Pitaya_ADC_0_0",
-        "xci_path": "ip\\system_AXIS_Red_Pitaya_ADC_0_0\\system_AXIS_Red_Pitaya_ADC_0_0.xci",
+        "xci_path": "ip/system_AXIS_Red_Pitaya_ADC_0_0/system_AXIS_Red_Pitaya_ADC_0_0.xci",
         "inst_hier_path": "AXIS_Red_Pitaya_ADC_0",
         "reference_info": {
           "ref_type": "hdl",
@@ -2946,6 +2946,9 @@
               },
               "FREQ_HZ": {
                 "value": "125000000"
+              },
+              "CLK_DOMAIN": {
+                "value": "adc_clk"
               }
             },
             "port_maps": {
@@ -2998,7 +3001,7 @@
       "topmod_0": {
         "vlnv": "xilinx.com:module_ref:topmod:1.0",
         "xci_name": "system_topmod_0_0",
-        "xci_path": "ip\\system_topmod_0_0\\system_topmod_0_0.xci",
+        "xci_path": "ip/system_topmod_0_0/system_topmod_0_0.xci",
         "inst_hier_path": "topmod_0",
         "reference_info": {
           "ref_type": "hdl",
@@ -3150,10 +3153,10 @@
       }
     },
     "interface_nets": {
-      "topmod_0_m_axis": {
+      "PS7_FIXED_IO": {
         "interface_ports": [
-          "topmod_0/m_axis",
-          "DAC_Output/s_axis"
+          "FIXED_IO",
+          "PS7/FIXED_IO"
         ]
       },
       "PS7_DDR": {
@@ -3162,10 +3165,10 @@
           "PS7/DDR"
         ]
       },
-      "PS7_FIXED_IO": {
+      "topmod_0_m_axis": {
         "interface_ports": [
-          "FIXED_IO",
-          "PS7/FIXED_IO"
+          "topmod_0/m_axis",
+          "DAC_Output/s_axis"
         ]
       }
     },

@@ -26,6 +26,7 @@ classdef DataAcquisition < handle
         dacReg          %DAC output register
         lastSample      %Last sample register
         holdOffReg      %Tigger hold off register
+        adcReg          %ADC register
     end
     
     properties(Constant)
@@ -38,7 +39,7 @@ classdef DataAcquisition < handle
         % Conversion values going from integer values to volts
         %
         CONV_ADC_LV = 1.1851/2^(DataAcquisition.ADC_WIDTH - 1);
-        CONV_ADC_HV = 29.3570/2^(DataAcquisition.ADC_WIDTH - 1);
+        CONV_ADC_HV = 27.5/2^(DataAcquisition.ADC_WIDTH - 1);
         CONV_DAC = 1.079/2^(DataAcquisition.ADC_WIDTH - 1);
     end
     
@@ -81,6 +82,7 @@ classdef DataAcquisition < handle
             self.dacReg = DeviceRegister('18',self.conn);
             self.lastSample = DeviceRegister('24',self.conn);
             self.holdOffReg = DeviceRegister('28',self.conn);
+            self.adcReg = DeviceRegister('2C',self.conn);
             %
             % Fast-filtering parameters
             %
@@ -230,13 +232,30 @@ classdef DataAcquisition < handle
             r = x/c;
         end
         
-        function self = fetchData(self,numSamples)
-            %FETCHDATA Fetches recorded in block memory from the device
+        function r = readADC(self)
+            %READADC Reads and returns the current ADC voltage
             %
-            %   SELF = FETCHDATA(SELF) Retrieves current number of recorded
+            %   V = READADC(SELF) Reads the current ADC voltages V for
+            %   device SELF
+            self.adcReg.read;
+            tmp = typecast(self.adcReg.value,'uint8');
+            x(1) = typecast(tmp(1:2),'int16');
+            x(2) = typecast(tmp(3:4),'int16');
+            x = double(x);
+            if strcmpi(self.jumpers,'lv')
+                r = x*self.CONV_ADC_LV;
+            elseif strcmpi(self.jumpers,'hv')
+                r = x*self.CONV_ADC_HV;
+            end
+        end
+        
+        function self = getRAM(self,numSamples)
+            %GETRAM Fetches recorded in block memory from the device
+            %
+            %   SELF = GETRAM(SELF) Retrieves current number of recorded
             %   samples from the device SELF
             %
-            %   SELF = FETCHDATA(SELF,N) Retrieves N samples from device
+            %   SELF = GETRAM(SELF,N) Retrieves N samples from device
             
             if nargin < 2
                 self.conn.keepAlive = true;
@@ -244,7 +263,7 @@ classdef DataAcquisition < handle
                 self.conn.keepAlive = false;
                 numSamples = self.lastSample.value;
             end
-            self.conn.write(0,'mode','fetch data','numSamples',numSamples);
+            self.conn.write(0,'mode','fetch ram','numSamples',numSamples);
             raw = typecast(self.conn.recvMessage,'uint8');
             if strcmpi(self.jumpers,'hv')
                 c = self.CONV_ADC_HV;
@@ -257,42 +276,12 @@ classdef DataAcquisition < handle
             self.t = dt*(0:(size(self.data,1)-1));
         end
         
-        function self = saveData(self,numSamples,saveopt)
-            %SAVEDATA Saves data continuously into FIFO
+        function self = getFIFO(self,numSamples)
+            %GETFIFO Saves data continuously into FIFO
             %
-            %   SELF = FETCHDATA(SELF) Retrieves current number of recorded
-            %   samples from the device SELF
-            %
-            %   SELF = FETCHDATA(SELF,N) Retrieves N samples from device
-            
-            if nargin < 3
-                saveopt = '-t';
-            elseif ~any(strcmp(saveopt,{'-t','-m','-f'}))
-                error('Save option must be one of ''-t'', ''-m'', or ''-f''');
-            end
-            self.conn.write(0,'mode','save data','numSamples',numSamples,'saveType',saveopt);
-            if ~strcmpi(saveopt,'-t')
-                return;
-            end
-            raw = typecast(self.conn.recvMessage,'uint8');
-            if strcmpi(self.jumpers,'hv')
-                c = self.CONV_ADC_HV;
-            elseif strcmpi(self.jumpers,'lv')
-                c = self.CONV_ADC_LV;
-            end
-            d = self.convertData(raw,c);
-            self.data = d;
-            dt = self.CLK^-1 * 2^(self.log2AvgsSlow.value);
-            self.t = dt*(0:(size(self.data,1)-1));
-        end
-        
-        function self = getFile(self)
-            %GETFILE Retrieves the last saved data file from the device
-            %
-            %   SELF = GETFILE(SELF) Retrives the last saved data file
-            %   associated with device SELF
-            
-            self.conn.write(0,'mode','get file');
+            %   SELF = GETFIFO(SELF,N) Retrieves N samples from device
+
+            self.conn.write(0,'mode','fetch fifo','numSamples',numSamples,'saveType',1);
             raw = typecast(self.conn.recvMessage,'uint8');
             if strcmpi(self.jumpers,'hv')
                 c = self.CONV_ADC_HV;
@@ -322,8 +311,8 @@ classdef DataAcquisition < handle
             self.delay.print('Delay',strwidth,'%.3e','s');
             self.numSamples.print('Number of samples',strwidth,'%d');
             self.log2AvgsSlow.print('Log 2 # Avgs (Slow)',strwidth,'%d');
-            self.dac(1).print('DAC 1',strwidth,'%.3f');
-            self.dac(2).print('DAC 2',strwidth,'%.3f');
+            self.dac(1).print('DAC 1',strwidth,'%.3f','V');
+            self.dac(2).print('DAC 2',strwidth,'%.3f','V');
         end
         
         

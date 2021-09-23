@@ -52,11 +52,11 @@ int main(int argc, char **argv)
       *(data + i) = *((uint32_t *)(cfg + (i << 2)));
     }
     /*
-     * Print then free data
+     * Save then free data
      */
-    for (i = 0;i<numSamples;i++) {
-        printf("%08x\n",*(data + i));
-    }
+    ptr = fopen("SavedData.bin","wb");
+    fwrite(data,4,(size_t)(numSamples),ptr);
+    fclose(ptr);
     free(data);
 
     //Unmap cfg from pointing to the previous location in memory

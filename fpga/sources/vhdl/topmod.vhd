@@ -357,6 +357,10 @@ begin
                             --
                             when X"000024" => readOnly(bus_m,bus_s,comState,mem_bus_s.last);
                             when X"000028" => rw(bus_m,bus_s,comState,trigHoldOff);
+                            --
+                            -- Auxiliary data
+                            --
+                            when X"00002C" => readOnly(bus_m,bus_s,comState,adcData_i);
                             
                             when others => 
                                 comState <= finishing;

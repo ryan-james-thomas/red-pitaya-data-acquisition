@@ -102,7 +102,7 @@ class Message:
 
     def close(self):
         #Closes the socket connection
-        print("Closing connection (%s, %s)" % self.addr)
+        print("Closing connection (%s, %s)" % self.addr,end='\n\n')
         try:
             self.selector.unregister(self.sock)
         except Exception as e:
@@ -130,7 +130,7 @@ class Message:
             else:
                 self.keep_alive = False
 
-            print("Header:")
+            print("Header received by server:")
             print(self.header)
             self._recv_buffer = self._recv_buffer[self.header_len:]
 
@@ -149,27 +149,39 @@ class Message:
             
             #Write data using io-controller
             self.fpga_response = appcontroller.write(pmsg,self.header)
-            print("Message written to server")
+            print("Header written to client:")
             #At end of reading of data, set class to write mode
             self._set_selector_events_mask("w")
 
     
     def create_response(self):
         data = self.fpga_response.pop("data")
-        if isinstance(data,bytes):
-            self.fpga_response["length"] = len(data)
-        else:
-            self.fpga_response["length"] = 4*len(data)
+        self.fpga_response["length"] = len(data)
+        #
+        # Make header
+        #
         json_str = json.dumps(self.fpga_response)
         print(json_str)
         tmp = json_str.encode('ascii')
         self._send_buffer = struct.pack("<H",len(tmp)) + tmp
-        if isinstance(data,bytes):
-            self._send_buffer += data
-        else:
-            for d in data:
-                self._send_buffer += struct.pack("<I",int(d,16))
+        #Append data
+        self._send_buffer += data
         self.response_created = True
+
+        # if isinstance(data,bytes):
+        #     self.fpga_response["length"] = len(data)
+        # else:
+        #     self.fpga_response["length"] = 4*len(data)
+        # json_str = json.dumps(self.fpga_response)
+        # print(json_str)
+        # tmp = json_str.encode('ascii')
+        # self._send_buffer = struct.pack("<H",len(tmp)) + tmp
+        # if isinstance(data,bytes):
+        #     self._send_buffer += data
+        # else:
+        #     for d in data:
+        #         self._send_buffer += struct.pack("<I",int(d,16))
+        # self.response_created = True
         
 
             

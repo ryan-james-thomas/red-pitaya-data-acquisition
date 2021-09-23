@@ -530,10 +530,10 @@ set files [list \
 add_files -norecurse -fileset $obj $files
 
 # Add local files from the original project (-no_copy_sources specified)
-set files [list \
- [file normalize "${origin_dir}/rp-data-acq/topmod_tb_behav.wcfg" ]\
-]
-set added_files [add_files -fileset sim_1 $files]
+# set files [list \
+#  [file normalize "${origin_dir}/rp-data-acq/topmod_tb_behav.wcfg" ]\
+# ]
+# set added_files [add_files -fileset sim_1 $files]
 
 # Set 'sim_1' fileset file properties for remote files
 set file "$origin_dir/sources/sim/AXI_Tester.vhd"
@@ -562,14 +562,14 @@ set_property -name "used_in_synthesis" -value "1" -objects $file_obj
 
 
 # Set 'sim_1' fileset file properties for local files
-set file "rp-data-acq/topmod_tb_behav.wcfg"
-set file_obj [get_files -of_objects [get_filesets sim_1] [list "*$file"]]
-set_property -name "is_enabled" -value "1" -objects $file_obj
-set_property -name "is_global_include" -value "0" -objects $file_obj
-set_property -name "library" -value "xil_defaultlib" -objects $file_obj
-set_property -name "path_mode" -value "RelativeFirst" -objects $file_obj
-set_property -name "used_in" -value "simulation" -objects $file_obj
-set_property -name "used_in_simulation" -value "1" -objects $file_obj
+# set file "rp-data-acq/topmod_tb_behav.wcfg"
+# set file_obj [get_files -of_objects [get_filesets sim_1] [list "*$file"]]
+# set_property -name "is_enabled" -value "1" -objects $file_obj
+# set_property -name "is_global_include" -value "0" -objects $file_obj
+# set_property -name "library" -value "xil_defaultlib" -objects $file_obj
+# set_property -name "path_mode" -value "RelativeFirst" -objects $file_obj
+# set_property -name "used_in" -value "simulation" -objects $file_obj
+# set_property -name "used_in_simulation" -value "1" -objects $file_obj
 
 
 # Set 'sim_1' fileset properties
