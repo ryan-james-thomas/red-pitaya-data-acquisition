@@ -51,6 +51,33 @@ ATTRIBUTE X_INTERFACE_PARAMETER : STRING;
 ATTRIBUTE X_INTERFACE_PARAMETER of m_axis_tdata: SIGNAL is "CLK_DOMAIN system_processing_system7_0_0_FCLK_CLK0,FREQ_HZ 125000000";
 ATTRIBUTE X_INTERFACE_PARAMETER of m_axis_tvalid: SIGNAL is "CLK_DOMAIN system_processing_system7_0_0_FCLK_CLK0,FREQ_HZ 125000000";
 
+component LockInDetector is
+    port(
+        --
+        -- Clocking and reset
+        --
+        clk         :   in  std_logic;
+        aresetn     :   in  std_logic;
+        --
+        -- Control
+        --
+        regs_i      :   in  t_param_reg_array(3 downto 0);
+        --
+        -- Signal out
+        --
+        dac_o       :   out t_dac;    
+        --
+        -- Data in
+        --
+        data_i      :   in  t_adc;
+        valid_i     :   in  std_logic;
+        --
+        -- Data out
+        --
+        data_o      :   out t_adc_array;
+        valid_o     :   out std_logic_vector(1 downto 0)
+    );
+end component;
 
 component QuickAvg is
     port(
@@ -89,6 +116,11 @@ component SaveADCData is
         data_i      :   in  std_logic_vector;   --Input data, maximum length of 32 bits
         valid_i     :   in  std_logic;          --High for one clock cycle when data_i is valid
         
+        trigEdge    :   in  std_logic;          --'0' for falling edge, '1' for rising edge
+        delay       :   in  unsigned;           --Acquisition delay
+        numSamples  :   in  t_mem_addr;         --Number of samples to save
+        trig_i      :   in  std_logic;          --Start trigger
+        
         bus_m       :   in  t_mem_bus_master;   --Master memory bus
         bus_s       :   out t_mem_bus_slave     --Slave memory bus
     );
@@ -106,25 +138,41 @@ signal reset                :   std_logic;
 --
 signal triggers             :   t_param_reg;
 signal topReg               :   t_param_reg;
-signal dac_o                :   t_param_reg;
+signal dacReg               :   t_param_reg;
 signal fastFiltReg          :   t_param_reg;
 signal slowFiltReg          :   t_param_reg;
+--
+-- Lock in signals
+--
+signal lockinRegs       :   t_param_reg_array(3 downto 0);
+signal lockin_dac_o     :   t_dac;
+signal lockin_data_i    :   t_adc;
+signal lockin_data_o    :   t_adc_array;
+signal lockin_valid_o   :   std_logic_vector(1 downto 0);
+signal saveLockIn_i     :   std_logic_vector(31 downto 0);
+
+signal inputSelect      :   std_logic;
+signal outputSelect     :   std_logic_vector(1 downto 0);
+signal dac_o            :   t_dac_array;
 
 --
 -- ADC signals
 --
 signal adc_i            :   t_adc_array;
+signal adc_filt_i       :   t_adc_array;
 signal adc_f            :   t_adc_array;
 signal adc_s            :   t_adc_array;
 signal valid_f, valid_s :   std_logic;
 --
 -- Memory signals
 --
+signal mem_bus      :   t_mem_bus_array(1 downto 0);
 signal mem_bus_m    :   t_mem_bus_master;
 signal mem_bus_s    :   t_mem_bus_slave;
 signal memReset     :   std_logic;
 signal saveData_i   :   std_logic_vector(31 downto 0);
 signal saveValid_i  :   std_logic;
+signal memTrig      :   std_logic;
 --
 -- Trigger signals
 --
@@ -150,82 +198,58 @@ signal enableSlow   :   std_logic;
 
 begin
 --
--- DAC Outputs
+-- Parse top-level signals
 --
-m_axis_tdata <= dac_o;
-m_axis_tvalid <= '1';
-ext_o <= (others => '0');
+trigEdge <= topReg(0);
+inputSelect <= topReg(1);
+outputSelect <= topReg(3 downto 2);
 --
 -- Create ADC data
 --
 adc_i(0) <= signed(adcData_i(15 downto 0));
 adc_i(1) <= signed(adcData_i(31 downto 16));
 --
--- Detects trigger edges
+-- Lock-in detection
 --
-trigEdge <= topReg(0);
-trig_i <= ext_i(7);
-TrigSyncProcess: process(adcclk,aresetn) is
-begin
-    if aresetn = '0' then
-        trigSync <= "00";
-    elsif rising_edge(adcclk) then
-        trigSync <= trigSync(0) & trig_i;
-    end if;
-end process;
+lockin_data_i <= adc_i(0) when inputSelect = '0' else adc_i(1);
+
+LockIn: LockInDetector
+port map(
+    clk         =>  adcClk,
+    aresetn     =>  aresetn,
+    regs_i      =>  lockinRegs,
+    dac_o       =>  lockin_dac_o,
+    data_i      =>  lockin_data_i,
+    valid_i     =>  '1',
+    data_o      =>  lockin_data_o,
+    valid_o     =>  lockin_valid_o
+);
+
+saveLockIn_i <= adc_to_slv(lockin_data_o);
+
+SaveDataLockin: SaveADCData
+port map(
+    readClk     =>  sysClk,
+    writeClk    =>  adcClk,
+    aresetn     =>  aresetn,
+    data_i      =>  saveLockIn_i,
+    valid_i     =>  lockin_valid_o(0),
+    trigEdge    =>  trigEdge,
+    delay       =>  delay,
+    numSamples  =>  numSamples,
+    trig_i      =>  memTrig,
+    bus_m       =>  mem_bus(1).m,
+    bus_s       =>  mem_bus(1).s
+);
+
 --
--- Delay of acquisition
+-- DAC Outputs
 --
-DelayProcess: process(adcClk,aresetn) is
-begin
-    if aresetn = '0' then
-        delayCount <= (others => '0');
-        delayState <= X"0";
-        enableSave <= '0';
-        memReset <= '0';
-    elsif rising_edge(adcClk) then
-        DelayCase: case delayState is
-            when X"0" =>
-                delayCount <= to_unsigned(1,delayCount'length);
-                enableSave <= '0';
-                if (trigEdge = '0' and trigSync = "10") or (trigEdge = '1' and trigSync = "01") or triggers(0) = '1' then
-                    delayState <= X"1";
-                    memReset <= '1';
-                elsif reset = '1' then
-                    memReset <= '1';
-                else
-                    memReset <= '0';
-                end if;
-                
-            when X"1" =>
-                memReset <= '0';
-                if delayCount < delay then
-                    delayCount <= delayCount + 1;
-                    enableSave <= '0';
-                else
-                    enableSave <= '1';
-                    delayState <= X"2";
-                end if;
-                
-            when X"2" =>
-                if mem_bus_s.last >= numSamples then
-                    delayState <= X"3";
-                    enableSave <= '0';
-                    delayCount <= (others => '0');
-                end if;
-                
-            when X"3" => 
-                enableSave <= '0';
-                if delayCount < trigHoldOff then
-                    delayCount <= delayCount + 1;
-                else
-                    delayState <= X"0";
-                end if;
-            
-            when others => null;
-        end case;           
-    end if;
-end process;
+dac_o(0) <= signed(dacReg(15 downto 0)) when outputSelect(0) = '0' else lockin_dac_o;
+dac_o(1) <= signed(dacReg(31 downto 16)) when outputSelect(1) = '0' else lockin_dac_o;
+m_axis_tdata <= dac_to_slv(dac_o);
+m_axis_tvalid <= '1';
+ext_o <= (others => '0');
 --
 -- Average data
 --
@@ -234,7 +258,7 @@ port map(
     clk         =>  adcClk,
     aresetn     =>  aresetn,
     reg_i       =>  fastFiltReg,
-    enable_i    =>  enableSave,
+    enable_i    =>  '1',
     adc_i       =>  adc_i,
     valid_i     =>  '1',
     adc_o       =>  adc_f,
@@ -243,8 +267,8 @@ port map(
 --
 -- Save data
 --
-saveData_i <= std_logic_vector(adc_f(1)) & std_logic_vector(adc_f(0));
-mem_bus_m.reset <= memReset;
+saveData_i <= adc_to_slv(adc_f);
+memTrig <= ext_i(7) or triggers(0);
 SaveData: SaveADCData
 port map(
     readClk     =>  sysClk,
@@ -252,8 +276,12 @@ port map(
     aresetn     =>  aresetn,
     data_i      =>  saveData_i,
     valid_i     =>  valid_f,
-    bus_m       =>  mem_bus_m,
-    bus_s       =>  mem_bus_s
+    trigEdge    =>  trigEdge,
+    delay       =>  delay,
+    numSamples  =>  numSamples,
+    trig_i      =>  memTrig,
+    bus_m       =>  mem_bus(0).m,
+    bus_s       =>  mem_bus(0).s
 );
 --
 -- Filter data for slow acquisition using FIFO
@@ -273,7 +301,7 @@ port map(
 --
 -- Save data into FIFO
 --
-fifo_i <= std_logic_vector(adc_s(1)) & std_logic_vector(adc_s(0));
+fifo_i <= adc_to_slv(adc_s);
 fifoReset <= fifoReg(1);
 SlowFIFO: FIFOHandler
 port map(
@@ -303,16 +331,23 @@ begin
         bus_s <= INIT_AXI_BUS_SLAVE;
         triggers <= (others => '0');
         topReg <= (others => '0');
-        dac_o <= (others => '0');
+        dacReg <= (others => '0');
         delay <= (others => '0');
         numSamples <= (0 => '1', others => '0');
         fastFiltReg <= (others => '0');
         slowFiltReg <= (others => '0');
         fifo_m <= INIT_FIFO_BUS_MASTER;
         fifoReg <= (others => '0');
-        mem_bus_m.trig <= '0';
-        mem_bus_m.addr <= (others => '0');
-        mem_bus_m.status <= idle;
+        lockInRegs <= (others => (others => '0'));
+        mem_bus(0).m <= INIT_MEM_BUS_MASTER;
+        mem_bus(1).m <= INIT_MEM_BUS_MASTER;
+--        mem_bus(0).m.trig <= '0';
+--        mem_bus(0).m.addr <= (others => '0');
+--        mem_bus(0).m.status <= idle;
+        
+--        mem_bus(1).m.trig <= '0';
+--        mem_bus(1).m.addr <= (others => '0');
+--        mem_bus(1).m.status <= idle;
         
         trigHoldOff <= (others => '0');
         
@@ -346,7 +381,7 @@ begin
                             when X"00000C" => rw(bus_m,bus_s,comState,delay);
                             when X"000010" => rw(bus_m,bus_s,comState,numSamples);
                             when X"000014" => rw(bus_m,bus_s,comState,slowFiltReg);
-                            when X"000018" => rw(bus_m,bus_s,comState,dac_o);
+                            when X"000018" => rw(bus_m,bus_s,comState,dacReg);
                             --
                             -- FIFO data
                             --
@@ -355,13 +390,20 @@ begin
                             --
                             -- Read-only cases
                             --
-                            when X"000024" => readOnly(bus_m,bus_s,comState,mem_bus_s.last);
-                            when X"000028" => rw(bus_m,bus_s,comState,trigHoldOff);
+                            when X"000024" => readOnly(bus_m,bus_s,comState,mem_bus(0).s.last);
+                            when X"000028" => readOnly(bus_m,bus_s,comState,mem_bus(1).s.last);
+                            when X"00002C" => rw(bus_m,bus_s,comState,trigHoldOff);
                             --
                             -- Auxiliary data
                             --
-                            when X"00002C" => readOnly(bus_m,bus_s,comState,adcData_i);
-                            
+                            when X"000030" => readOnly(bus_m,bus_s,comState,adcData_i);
+                            --
+                            -- Lock-in data
+                            --
+                            when X"000040" => rw(bus_m,bus_s,comState,lockinRegs(0));
+                            when X"000044" => rw(bus_m,bus_s,comState,lockinRegs(1));
+                            when X"000048" => rw(bus_m,bus_s,comState,lockinRegs(2));
+                            when X"00004C" => rw(bus_m,bus_s,comState,lockinRegs(3));
                             when others => 
                                 comState <= finishing;
                                 bus_s.resp <= "11";
@@ -377,28 +419,52 @@ begin
 --                                bus_s.resp <= "11";
 --                        end case;
                     --
-                    -- Memory reading
+                    -- Memory reading of normal memory
                     --
                     when X"02" =>  
                         if bus_m.valid(1) = '0' then
                             bus_s.resp <= "11";
                             comState <= finishing;
-                            mem_bus_m.trig <= '0';
-                            mem_bus_m.status <= idle;
+                            mem_bus(0).m.trig <= '0';
+                            mem_bus(0).m.status <= idle;
                         elsif mem_bus_s.valid = '1' then
-                            bus_s.data <= mem_bus_s.data;
+                            bus_s.data <= mem_bus(0).s.data;
                             comState <= finishing;
                             bus_s.resp <= "01";
-                            mem_bus_m.status <= idle;
-                            mem_bus_m.trig <= '0';
-                        elsif mem_bus_s.status = idle then
-                            mem_bus_m.addr <= bus_m.addr(MEM_ADDR_WIDTH+1 downto 2);
-                            mem_bus_m.status <= waiting;
-                            mem_bus_m.trig <= '1';
+                            mem_bus(0).m.status <= idle;
+                            mem_bus(0).m.trig <= '0';
+                        elsif mem_bus(0).s.status = idle then
+                            mem_bus(0).m.addr <= bus_m.addr(MEM_ADDR_WIDTH+1 downto 2);
+                            mem_bus(0).m.status <= waiting;
+                            mem_bus(0).m.trig <= '1';
                          else
-                            mem_bus_m.trig <= '0';
+                            mem_bus(0).m.trig <= '0';
                         end if;
+                        
                     
+                    --
+                    -- Memory reading of lock-in detection
+                    --
+                    when X"03" =>  
+                        if bus_m.valid(1) = '0' then
+                            bus_s.resp <= "11";
+                            comState <= finishing;
+                            mem_bus(1).m.trig <= '0';
+                            mem_bus(1).m.status <= idle;
+                        elsif mem_bus_s.valid = '1' then
+                            bus_s.data <= mem_bus(1).s.data;
+                            comState <= finishing;
+                            bus_s.resp <= "01";
+                            mem_bus(1).m.status <= idle;
+                            mem_bus(1).m.trig <= '0';
+                        elsif mem_bus(1).s.status = idle then
+                            mem_bus(1).m.addr <= bus_m.addr(MEM_ADDR_WIDTH+1 downto 2);
+                            mem_bus(1).m.status <= waiting;
+                            mem_bus(1).m.trig <= '1';
+                         else
+                            mem_bus(1).m.trig <= '0';
+                        end if;
+                                            
                     when others => 
                         comState <= finishing;
                         bus_s.resp <= "11";

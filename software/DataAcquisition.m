@@ -8,12 +8,15 @@ classdef DataAcquisition < handle
     properties(SetAccess = immutable)
         conn            %Connection client object
         trigEdge        %Edge for triggering fast acquisition
+        inputSelect     %Input selector for lock-in detection
+        outputSelect    %Output selector for manual or lock-in output routed to DACs
         log2AvgsFast    %Log2(#avgs) for fast acquisition
         delay           %Delay between trigger and start of fast acquistion
         numSamples      %Number of samples for fast acquisition
         log2AvgsSlow    %Log2(#avgs) for slow acquisition
         holdOff         %Trigger hold off
         dac             %DAC outputs (2 element array)
+        lockin          %Lock-in control
     end
     
     properties(SetAccess = protected)
@@ -24,9 +27,10 @@ classdef DataAcquisition < handle
         numSamplesReg   %Number of samples register for fast acquisition
         slowFiltReg     %Slow-filtering register
         dacReg          %DAC output register
-        lastSample      %Last sample register
+        lastSample      %Last sample registers, 2 elements
         holdOffReg      %Tigger hold off register
         adcReg          %ADC register
+        lockInRegs      %4-element lock-in registers
     end
     
     properties(Constant)
@@ -81,13 +85,22 @@ classdef DataAcquisition < handle
             self.slowFiltReg = DeviceRegister('14',self.conn);
             self.dacReg = DeviceRegister('18',self.conn);
             self.lastSample = DeviceRegister('24',self.conn);
-            self.holdOffReg = DeviceRegister('28',self.conn);
-            self.adcReg = DeviceRegister('2C',self.conn);
+            self.lastSample(2) = DeviceRegister('28',self.conn);
+            self.holdOffReg = DeviceRegister('2C',self.conn);
+            self.adcReg = DeviceRegister('30',self.conn);
+            self.lockInRegs = DeviceRegister.empty;
+            for nn = 1:4
+                self.lockInRegs(nn) = DeviceRegister(hex2dec('40') + nn*4,self.conn);
+            end
             %
             % Fast-filtering parameters
             %
             self.trigEdge = DeviceParameter([0,0],self.topReg)...
                 .setLimits('lower',0,'upper',1);
+            self.inputSelect = DeviceParameter([1,1],self.topReg)...
+                .setLimits('lower',0,'upper',1);
+            self.outputSelect = DeviceParameter([2,3],self.topReg)...
+                .setLimits('lower',0,'upper',3);
             self.log2AvgsFast = DeviceParameter([0,4],self.fastFiltReg)...
                 .setLimits('lower',0,'upper',31);
             self.delay = DeviceParameter([0,31],self.delayReg)...
@@ -112,6 +125,10 @@ classdef DataAcquisition < handle
             self.dac(2) = DeviceParameter([16,31],self.dacReg,'int16')...
                 .setLimits('lower',-1,'upper',1)...
                 .setFunctions('to',@(x) x/self.CONV_DAC,'from',@(x) x*self.CONV_DAC); 
+            %
+            % Lock-in control
+            %
+            self.lockin = DataAcquisitionLockInControl(self,self.lockInRegs);
             
         end
         
@@ -120,6 +137,8 @@ classdef DataAcquisition < handle
             %
             %   SELF = SETDEFAULTS(SELF) sets default values for SELF
             self.trigEdge.set(1);
+            self.inputSelect.set(0);
+            self.outputSelect.set(0);
             self.log2AvgsFast.set(0);
             self.delay.set(100e-9);
             self.numSamples.set(100);
@@ -127,6 +146,7 @@ classdef DataAcquisition < handle
             self.log2AvgsSlow.set(10);
             self.dac(1).set(0);
             self.dac(2).set(0);
+            self.lockin.setDefaults;
         end
         
         function self = check(self)
@@ -154,8 +174,9 @@ classdef DataAcquisition < handle
             self.numSamplesReg.write;
             self.holdOffReg.write;
             self.slowFiltReg.write;
-            self.conn.keepAlive = false;
             self.dacReg.write;
+            self.conn.keepAlive = false;
+            self.lockInRegs.write;
         end
         
         function self = fetch(self)
@@ -174,8 +195,10 @@ classdef DataAcquisition < handle
             self.numSamplesReg.read;
             self.holdOffReg.read;
             self.slowFiltReg.read;
-            self.conn.keepAlive = false;
             self.dacReg.read;
+            self.lockInRegs.read;
+            self.conn.keepAlive = false;
+            self.lastSample.read;
             %
             % Get parameter data from registers
             %
@@ -188,6 +211,7 @@ classdef DataAcquisition < handle
             for nn = 1:numel(self.dac)
                 self.dac(nn).get;
             end
+            self.lockin.get;
         end
         
         function self = start(self)
@@ -259,9 +283,9 @@ classdef DataAcquisition < handle
             
             if nargin < 2
                 self.conn.keepAlive = true;
-                self.lastSample.read;
+                self.lastSample(1).read;
                 self.conn.keepAlive = false;
-                numSamples = self.lastSample.value;
+                numSamples = self.lastSample(1).value;
             end
             self.conn.write(0,'mode','fetch ram','numSamples',numSamples);
             raw = typecast(self.conn.recvMessage,'uint8');
@@ -273,6 +297,34 @@ classdef DataAcquisition < handle
             d = self.convertData(raw,c);
             self.data = d;
             dt = self.CLK^-1 * 2^(self.log2AvgsFast.value);
+            self.t = dt*(0:(size(self.data,1)-1));
+        end
+        
+        function self = getIQ(self,numSamples)
+            %GETIQ Fetches recorded in block memory from the device
+            %corresponding to the I/Q data from the lock-in detector
+            %
+            %   SELF = GETIQ(SELF) Retrieves current number of recorded
+            %   samples from the device SELF
+            %
+            %   SELF = GETIQ(SELF,N) Retrieves N samples from device
+            
+            if nargin < 2
+                self.conn.keepAlive = true;
+                self.lastSample(2).read;
+                self.conn.keepAlive = false;
+                numSamples = self.lastSample(2).value;
+            end
+            self.conn.write(0,'mode','fetch iq','numSamples',numSamples);
+            raw = typecast(self.conn.recvMessage,'uint8');
+            if strcmpi(self.jumpers,'hv')
+                c = self.CONV_ADC_HV;
+            elseif strcmpi(self.jumpers,'lv')
+                c = self.CONV_ADC_LV;
+            end
+            d = self.convertData(raw,c);
+            self.data = d;
+            dt = self.CLK^-1 * 2^(self.lockin.cicRate.value);
             self.t = dt*(0:(size(self.data,1)-1));
         end
         
@@ -307,12 +359,15 @@ classdef DataAcquisition < handle
             fprintf(1,'\t ----------------------------------\n');
             fprintf(1,'\t Parameters\n');
             self.trigEdge.print('Trigger edge',strwidth,'%d');
+            self.inputSelect.print('Input select',strwidth,'%d');
+            self.outputSelect.print('Output select',strwidth','%d');
             self.log2AvgsFast.print('Log 2 # Avgs (Fast)',strwidth,'%d');
             self.delay.print('Delay',strwidth,'%.3e','s');
             self.numSamples.print('Number of samples',strwidth,'%d');
             self.log2AvgsSlow.print('Log 2 # Avgs (Slow)',strwidth,'%d');
             self.dac(1).print('DAC 1',strwidth,'%.3f','V');
             self.dac(2).print('DAC 2',strwidth,'%.3f','V');
+            self.lockin.print(strwidth);
         end
         
         

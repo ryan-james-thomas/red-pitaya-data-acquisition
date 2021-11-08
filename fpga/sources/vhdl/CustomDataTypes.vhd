@@ -28,6 +28,9 @@ constant NUM_DACS           :   natural :=  2;
 subtype t_dac is signed(DAC_WIDTH-1 downto 0);
 type t_dac_array is array(NUM_DACS - 1 downto 0) of t_dac;
 
+function adc_to_slv(ARG : t_adc_array) return std_logic_vector;
+function dac_to_slv(ARG : t_dac_array) return std_logic_vector;
+
 --
 -- Defines AXI address and data widths
 --
@@ -66,6 +69,7 @@ end record t_mem_bus;
 
 type t_mem_bus_master_array is array(natural range <>) of t_mem_bus_master;
 type t_mem_bus_slave_array is array(natural range <>) of t_mem_bus_slave;
+type t_mem_bus_array is array(natural range <>) of t_mem_bus;
 
 --
 -- Define initial values
@@ -143,10 +147,44 @@ end record t_module_status;
 constant INIT_MODULE_STATUS     :   t_module_status :=  (started    =>  '0',
                                                          running    =>  '0',
                                                          done       =>  '0');
+
+procedure signal_sync(
+    signal clk_i   :   in       std_logic;
+    signal aresetn :   in       std_logic;
+    signal trig_i  :   in       std_logic;
+    signal trig_o  :   inout    std_logic_vector(1 downto 0));
+
 end CustomDataTypes;
 
 --------------------------------------------------------------------------------------------------
 --------------------------------------------------------------------------------------------------
 package body CustomDataTypes is
+
+function adc_to_slv(ARG : t_adc_array) return std_logic_vector is
+    variable RESULT :   std_logic_vector(31 downto 0);
+begin
+    RESULT := std_logic_vector(ARG(1)) & std_logic_vector(ARG(0));
+    return RESULT;
+end adc_to_slv;
+
+function dac_to_slv(ARG : t_dac_array) return std_logic_vector is
+    variable RESULT :   std_logic_vector(31 downto 0);
+begin
+    RESULT := std_logic_vector(ARG(1)) & std_logic_vector(ARG(0));
+    return RESULT;
+end dac_to_slv;
+
+procedure signal_sync(
+    signal clk_i   :   in       std_logic;
+    signal aresetn :   in       std_logic;
+    signal trig_i  :   in       std_logic;
+    signal trig_o  :   inout    std_logic_vector(1 downto 0)) is
+begin
+    if aresetn = '0' then
+        trig_o <= (others => trig_i);
+    elsif rising_edge(clk_i) then
+        trig_o <= trig_o(0) & trig_i;
+    end if;
+end signal_sync; 
 
 end CustomDataTypes;
