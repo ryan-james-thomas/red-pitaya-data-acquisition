@@ -51,6 +51,16 @@ def write(data,header):
             response["data"] = fid.read()
             fid.close()
 
+    elif header["mode"] == "fetch iq":
+        cmd = ['./fetchIQ',format(header["numSamples"])]
+        if ("print" in header) and (header["print"]):
+            print("Command: ",cmd)
+        result = subprocess.run(cmd,stdout=subprocess.PIPE)
+
+        if result.returncode == 0:
+            fid = open("SavedData.bin","rb")
+            response["data"] = fid.read()
+            fid.close()
 
     elif header["mode"] == "fetch fifo":
         cmd = ['./fetchFIFO','-t',format(header["saveType"]),'-n',format(header["numSamples"])]

@@ -4,3 +4,7 @@ sources/system/ip/
 sources/system/ipshared/
 sources/system/ui
 
+sources/ip/.Xil/
+*.jou
+*.log
+*.str
