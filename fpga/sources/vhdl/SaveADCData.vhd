@@ -122,6 +122,7 @@ begin
                         delayCount <= delayCount + 1;
                     else
                         writeState <= write_enabled;
+                        enable <= '1';
                     end if;
                     
                 when write_enabled =>

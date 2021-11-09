@@ -427,7 +427,7 @@ begin
                             comState <= finishing;
                             mem_bus(0).m.trig <= '0';
                             mem_bus(0).m.status <= idle;
-                        elsif mem_bus_s.valid = '1' then
+                        elsif mem_bus(0).s.valid = '1' then
                             bus_s.data <= mem_bus(0).s.data;
                             comState <= finishing;
                             bus_s.resp <= "01";
@@ -451,7 +451,7 @@ begin
                             comState <= finishing;
                             mem_bus(1).m.trig <= '0';
                             mem_bus(1).m.status <= idle;
-                        elsif mem_bus_s.valid = '1' then
+                        elsif mem_bus(1).s.valid = '1' then
                             bus_s.data <= mem_bus(1).s.data;
                             comState <= finishing;
                             bus_s.resp <= "01";

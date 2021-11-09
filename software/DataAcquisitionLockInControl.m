@@ -29,22 +29,22 @@ classdef DataAcquisitionLockInControl < handle
             
             self.driveFreq = DeviceParameter([0,26],regs(1))...
                 .setLimits('lower',0,'upper',50e6)...
-                .setFunctions('to',@(x) x/self.parent.CLK*2^(self.DDS_WIDTH - 1),'from',@(x) x*self.parent.CLK/2^(self.DDS_WIDTH - 1));
+                .setFunctions('to',@(x) x/self.parent.CLK*2^(self.DDS_WIDTH),'from',@(x) x*self.parent.CLK/2^(self.DDS_WIDTH));
             
             self.demodFreq = DeviceParameter([0,26],regs(2))...
                 .setLimits('lower',0,'upper',50e6)...
-                .setFunctions('to',@(x) x/self.parent.CLK*2^(self.DDS_WIDTH - 1),'from',@(x) x*self.parent.CLK/2^(self.DDS_WIDTH - 1));
+                .setFunctions('to',@(x) x/self.parent.CLK*2^(self.DDS_WIDTH),'from',@(x) x*self.parent.CLK/2^(self.DDS_WIDTH));
             
             self.demodPhase = DeviceParameter([0,26],regs(3))...
                 .setLimits('lower',-360,'upper',360)...
-                .setFunctions('to',@(x) mod(x,360)/360*2^(self.DDS_WIDTH - 1),'from',@(x) x*360/2^(self.DDS_WIDTH - 1));
+                .setFunctions('to',@(x) mod(x,360)/360*2^(self.DDS_WIDTH),'from',@(x) x*360/2^(self.DDS_WIDTH));
             
             self.cicRate = DeviceParameter([8,11],regs(4))...
                 .setLimits('lower',7,'upper',13);
             
             self.driveAmp = DeviceParameter([0,7],regs(4))...
                 .setLimits('lower',0,'upper',1)...
-                .setFunctions('to',@(x) x/255,'from',@(x) x*255);
+                .setFunctions('to',@(x) x*255,'from',@(x) x/255);
         end
         
         function self = setDefaults(self)
@@ -58,7 +58,6 @@ classdef DataAcquisitionLockInControl < handle
             self.demodPhase.set(0);
             self.cicRate.set(7);
             self.driveAmp.set(1);
-
         end
         
         function self = get(self)
@@ -70,6 +69,7 @@ classdef DataAcquisitionLockInControl < handle
             self.demodFreq.get;
             self.demodPhase.get;
             self.cicRate.get;
+            self.driveAmp.get;
         end
 
         function ss = print(self,width)
@@ -80,7 +80,7 @@ classdef DataAcquisitionLockInControl < handle
             %   prints it to the command line
             s{1} = self.driveFreq.print('Drive frequency [Hz]',width,'%.3e');
             s{2} = self.demodFreq.print('Demod. frequency [Hz]',width,'%.3e');
-            s{3} = self.demodPhase.print('Demod. phase [rad]',width,'%.3f');
+            s{3} = self.demodPhase.print('Demod. phase [deg]',width,'%.3f');
             s{4} = self.cicRate.print('Log2(CIC decimation)',width,'%d');
             s{5} = self.driveAmp.print('Drive amplitude',width,'%.3f');
             

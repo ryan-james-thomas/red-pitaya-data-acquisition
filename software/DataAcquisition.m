@@ -89,8 +89,8 @@ classdef DataAcquisition < handle
             self.holdOffReg = DeviceRegister('2C',self.conn);
             self.adcReg = DeviceRegister('30',self.conn);
             self.lockInRegs = DeviceRegister.empty;
-            for nn = 1:4
-                self.lockInRegs(nn) = DeviceRegister(hex2dec('40') + nn*4,self.conn);
+            for nn = 0:3
+                self.lockInRegs(nn + 1) = DeviceRegister(hex2dec('40') + nn*4,self.conn);
             end
             %
             % Fast-filtering parameters
@@ -203,6 +203,8 @@ classdef DataAcquisition < handle
             % Get parameter data from registers
             %
             self.trigEdge.get;
+            self.inputSelect.get;
+            self.outputSelect.get;
             self.log2AvgsFast.get;
             self.delay.get;
             self.numSamples.get;

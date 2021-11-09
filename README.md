@@ -2,6 +2,8 @@
 
 This is a simple data acquisition system for the Red Pitaya 14-bit development board.  It collects and stores data from the two ADCs at variable sample rates for later retrieval.  There are two methods of storage.  The first method stores up to 16384 samples on each ADC in a block memory; this data capture can be triggered on either hardware or software.  The second method stores data in a 512 address FIFO buffer which can be read continuously via an AXI interface, which means it can record as much data as there is storage on the Red Pitaya memory card.  Both methods can reduce the sampling rate by averaging over 2^N samples.
 
+An additional acquisition method is to use lock-in or phase-sensitive detection.  The Red Pitaya generates a sinusoidal output signal with variable frequency and amplitude, which can be connected to a physical actuator.  The output of the system of interest is then connected to one of the ADCs.  The lock-in module allows for phase sensitive detection at different demodulation frequencies and phases, with a CIC filter reducing the sample rate and eliminating the carrier and sidebands.
+
 The external trigger is currently set to be DIO7_N on the [E1 connector](https://redpitaya.readthedocs.io/en/latest/developerGuide/hardware/125-14/extent.html#extension-connector).
 
 
@@ -83,6 +85,18 @@ For the fast acquisition method there are four parameters of interest:
 For the slow acquisition method there is only the one parameter:
   - Log2 of the number of averages: This controls the number of averages/de-sampling of the incoming ADC data.  Data is de-sampled to a new rate of 125 MHz x 2^-N where N is setting of this parameter
 
+For lock-in detection we have 5 parameters of interest:
+  - Drive frequency: this is the frequency of the signal that is output by the DACs
+  - Drive amplitude: this is a scaling factor between 0 and 1 which sets the amplitude of the output voltage
+  - Demodulation frequency: this the frequency of the demodulation signal
+  - Demodulation phase: this is the phase of the demodulation signal
+  - CIC rate: this is the log-base-2 of the CIC decimation rate, which filters the demodulated data to eliminate the carrier and sidebands
+The I and Q components of the demodulated signal are stored in their own block memory using the same settings as for the fast acquisition mode
+
+Finally, there are 2 top-level parameters:
+  - Input selector: this selects which ADC is used for the lock-in detection: 0 for ADC1 and 1 for ADC2
+  - Output selector: one for each channel, sets whether the output of the DAC is a fixed voltage (for debugging) or the output of the lock-in DDS.
+
 These parameters can be accessed via the memory-mapped AXI interface, or, alternatively, via the provided remote MATLAB interface.
 
 # MATLAB interface
@@ -93,12 +107,15 @@ dev = DataAcquisition(<IP address>);
 ```
 where `<IP address>` is the IP address of the Red Pitaya.  Accessible properties are
   - trigEdge: Trigger edge to use: 0 for falling edge, 1 for rising edge
+  - inputSelect: Selects with ADC to use for lock-in. ADC1 is 0 and ADC2 is 1
+  - outputSelect: One for each DAC, these select whether a fixed voltage is applied or the lock-in DDS is used for the output voltage
   - holdOff: trigger hold off in seconds
   - log2AvgsFast: log2 of the number of averages for the fast acquisition method
   - delay: delay between trigger and start of acquisition.  Must be larger than 64 ns
   - numSamples: number of samples to acquire for the fast acquisition
   - log2AvgsSlow: log2 of the number of averages for the slow acquisition method
-  - lastSample: this is a *read only* parameter that indicates how many samples have been acquired by the fast method.
+  - lastSample: 2 of these, these are *read only* parameters that indicates how many samples have been acquired by the fast method (1) or the lock-in (2).
+  - lockin: this is separate module for the lock-in detection system.  It has parameters 'driveFreq', 'demodFreq', 'demodPhase', 'cicRate', and 'driveAmp' which are explained above.
 
 In addition, there is the property `jumpers` which you should set to either `lv` or `hv` depending on the setting of the actual ADC input jumpers on the device.  Currently, the software only supports having both sets of jumpers set to the same value.
 
