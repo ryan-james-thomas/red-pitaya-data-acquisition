@@ -7,6 +7,7 @@ classdef DataAcquisitionLockInControl < handle
         demodFreq       %Demodulation frequency
         demodPhase      %Demodulation phase
         cicRate         %Log2(CIC decimation rate)
+        shift           %Log2(division of filtered signals)
         driveAmp        %Driving amplitude as multiplier
     end
     
@@ -40,7 +41,10 @@ classdef DataAcquisitionLockInControl < handle
                 .setFunctions('to',@(x) mod(x,360)/360*2^(self.DDS_WIDTH),'from',@(x) x*360/2^(self.DDS_WIDTH));
             
             self.cicRate = DeviceParameter([8,11],regs(4))...
-                .setLimits('lower',7,'upper',13);
+                .setLimits('lower',2,'upper',13);
+
+            self.shift = DeviceParameter([12,15],regs(4))...
+                .setLimits('lower',0,'upper',16);
             
             self.driveAmp = DeviceParameter([0,7],regs(4))...
                 .setLimits('lower',0,'upper',1)...
@@ -57,6 +61,7 @@ classdef DataAcquisitionLockInControl < handle
             self.demodFreq.set(3e6);
             self.demodPhase.set(0);
             self.cicRate.set(7);
+            self.shift.set(12);
             self.driveAmp.set(1);
         end
         
@@ -69,6 +74,7 @@ classdef DataAcquisitionLockInControl < handle
             self.demodFreq.get;
             self.demodPhase.get;
             self.cicRate.get;
+            self.shift.get;
             self.driveAmp.get;
         end
 
@@ -82,7 +88,8 @@ classdef DataAcquisitionLockInControl < handle
             s{2} = self.demodFreq.print('Demod. frequency [Hz]',width,'%.3e');
             s{3} = self.demodPhase.print('Demod. phase [deg]',width,'%.3f');
             s{4} = self.cicRate.print('Log2(CIC decimation)',width,'%d');
-            s{5} = self.driveAmp.print('Drive amplitude',width,'%.3f');
+            s{5} = self.shift.print('Log2(Division of filtered signals',width,'%d');
+            s{6} = self.driveAmp.print('Drive amplitude',width,'%.3f');
             
             ss = '';
             for nn = 1:numel(s)
@@ -105,6 +112,7 @@ classdef DataAcquisitionLockInControl < handle
             s.demodFreq = self.demodFreq.struct;
             s.demodPhase = self.demodPhase.struct;
             s.cicRate = self.cicRate.struct;
+            s.shift = self.shift.struct;
             s.driveAmp = self.driveAmp.struct;
         end
         
@@ -114,6 +122,7 @@ classdef DataAcquisitionLockInControl < handle
             self.demodFreq.set(s.demodFreq.value);
             self.demodPhase.set(s.demodPhase.value);
             self.cicRate.set(s.cicRate.value);
+            self.shift.set(s.shift.value);
             self.driveAmp.set(s.driveAmp.value);
         end
         
