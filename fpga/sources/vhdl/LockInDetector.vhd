@@ -113,12 +113,13 @@ signal mult_cos_o, mult_sin_o   :   std_logic_vector(data_slv_i'length + DDS_OUT
 --
 -- Filtering signals
 --
-signal cicLog2Rate  :   unsigned(3 downto 0);
-signal cicShift     :   natural;
-signal filterConfig, filterConfig_old :   std_logic_vector(15 downto 0);
-signal filter_valid :   std_logic;
-signal filt_cos_i, filt_sin_i   :   std_logic_vector(31 downto 0);
-signal filt_cos_o, filt_sin_o   :   std_logic_vector(71 downto 0);
+signal cicLog2Rate                      :   unsigned(3 downto 0);
+signal cicShift                         :   natural;
+signal setShift                         :   unsigned(3 downto 0);
+signal filterConfig, filterConfig_old   :   std_logic_vector(15 downto 0);
+signal filter_valid                     :   std_logic;
+signal filt_cos_i, filt_sin_i           :   std_logic_vector(31 downto 0);
+signal filt_cos_o, filt_sin_o           :   std_logic_vector(71 downto 0);
 signal filt_cos_valid, filt_sin_valid   :   std_logic;
 
 begin
@@ -189,6 +190,7 @@ port map(
 -- Filter
 --
 cicLog2Rate <= unsigned(regs_i(3)(11 downto 8));
+setShift <= unsigned(regs_i(3)(15 downto 12));
 cicShift <= to_integer(cicLog2Rate) + to_integer(cicLog2Rate) + to_integer(cicLog2Rate);
 filterConfig <= std_logic_vector(shift_left(to_unsigned(1,filterConfig'length),to_integer(cicLog2Rate)));
 ChangeProc: process(clk,aresetn) is
@@ -237,8 +239,8 @@ PORT MAP (
     m_axis_data_tvalid      => filt_sin_valid
 ); 
 
-data_o(0) <= resize(shift_right(signed(filt_cos_o(64 downto 0)),cicShift + 12),t_adc'length);
-data_o(1) <= resize(shift_right(signed(filt_sin_o(64 downto 0)),cicShift + 12),t_adc'length);
+data_o(0) <= resize(shift_right(signed(filt_cos_o(64 downto 0)),cicShift + to_integer(setShift)),t_adc'length);
+data_o(1) <= resize(shift_right(signed(filt_sin_o(64 downto 0)),cicShift + to_integer(setShift)),t_adc'length);
 valid_o <= filt_sin_valid & filt_cos_valid;
 
 end Behavioral;
