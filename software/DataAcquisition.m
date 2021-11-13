@@ -289,7 +289,9 @@ classdef DataAcquisition < handle
                 self.conn.keepAlive = false;
                 numSamples = self.lastSample(1).value;
             end
-            self.conn.write(0,'mode','fetch ram','numSamples',numSamples);
+            self.conn.write(0,'mode','command','cmd',...
+                {'./fetchRAM',sprintf('%d',round(numSamples))},...
+                'return_mode','file');
             raw = typecast(self.conn.recvMessage,'uint8');
             if strcmpi(self.jumpers,'hv')
                 c = self.CONV_ADC_HV;
@@ -317,7 +319,9 @@ classdef DataAcquisition < handle
                 self.conn.keepAlive = false;
                 numSamples = self.lastSample(2).value;
             end
-            self.conn.write(0,'mode','fetch iq','numSamples',numSamples);
+            self.conn.write(0,'mode','command','cmd',...
+                {'./fetchIQ',sprintf('%d',round(numSamples))},...
+                'return_mode','file');
             raw = typecast(self.conn.recvMessage,'uint8');
             if strcmpi(self.jumpers,'hv')
                 c = self.CONV_ADC_HV;
@@ -335,7 +339,9 @@ classdef DataAcquisition < handle
             %
             %   SELF = GETFIFO(SELF,N) Retrieves N samples from device
 
-            self.conn.write(0,'mode','fetch fifo','numSamples',numSamples,'saveType',1);
+            self.conn.write(0,'mode','command','cmd',...
+                {'./fetchRAM','-t',sprintf('%d',round(numSamples)),'-t',num2str(1)},...
+                'return_mode','file');
             raw = typecast(self.conn.recvMessage,'uint8');
             if strcmpi(self.jumpers,'hv')
                 c = self.CONV_ADC_HV;
