@@ -88,7 +88,7 @@ classdef DataAcquisitionLockInControl < handle
             s{2} = self.demodFreq.print('Demod. frequency [Hz]',width,'%.3e');
             s{3} = self.demodPhase.print('Demod. phase [deg]',width,'%.3f');
             s{4} = self.cicRate.print('Log2(CIC decimation)',width,'%d');
-            s{5} = self.shift.print('Log2(Division of filtered signals',width,'%d');
+            s{5} = self.shift.print('Log2(Div. filt. signals)',width,'%d');
             s{6} = self.driveAmp.print('Drive amplitude',width,'%.3f');
             
             ss = '';
@@ -102,7 +102,7 @@ classdef DataAcquisitionLockInControl < handle
         
         function disp(self)
             %DISP Displays the object properties
-            disp('LaserServoLockInControl object with properties:');
+            disp('DataAcquisitionLockInControl object with properties:');
             disp(self.print(25));
         end
         

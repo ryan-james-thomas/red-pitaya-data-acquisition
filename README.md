@@ -4,6 +4,8 @@ This is a simple data acquisition system for the Red Pitaya 14-bit development b
 
 An additional acquisition method is to use lock-in or phase-sensitive detection.  The Red Pitaya generates a sinusoidal output signal with variable frequency and amplitude, which can be connected to a physical actuator.  The output of the system of interest is then connected to one of the ADCs.  The lock-in module allows for phase sensitive detection at different demodulation frequencies and phases, with a CIC filter reducing the sample rate and eliminating the carrier and sidebands.
 
+To be compatible with other projects, from v0.4 onwards the system uses the socket server interface and MATLAB classes at https://github.com/atomlaser-lab/red-pitaya-interface.  
+
 The external trigger is currently set to be DIO7_N on the [E1 connector](https://redpitaya.readthedocs.io/en/latest/developerGuide/hardware/125-14/extent.html#extension-connector).
 
 
@@ -15,13 +17,15 @@ Connect the Red Pitaya (RP) to power via the USB connector labelled PWR (on the 
 
 ### First use
 
-Copy over the files in the 'software/' directory ending in '.py', the file 'get_ip.sh', and the file 'saveScanData.c' using either `scp` (from a terminal on your computer) or your favourite GUI (I recommend WinSCP for Windows).  You will also need to copy over the file 'fpga/system_wrapper.bit' which is the device configuration file.  If using `scp` from the command line, navigate to the main project directory on your computer and use
+Clone the git repository at https://github.com/atomlaser-lab/red-pitaya-interface into a "server" directory using the command
 ```
-scp fpga/system_wrapper.bit software/*.py software/get_ip.sh software/*.c root@rp-{MAC}.local:/root/
+git clone https://github.com/atomlaser-lab/red-pitaya-interface server
 ```
-and give your password as necessary.  You can move these files to a different directory on the RP after they have been copied.
-
-Next, change the execution privileges of `get_ip.sh` using `chmod a+x get_ip.sh`.  Check that running `./get_ip.sh` produces a single IP address.  If it doesn't, run the command `ip addr` and look for an IP address that isn't `127.0.0.1` (which is the local loopback address).  There may be more than one IP address -- you're looking for one that has tags 'global' and 'dynamic'.  Here is the output from one such device:
+Navigate into this directory using `cd server`, and then change the permissions of the file 'get_ip.sh' to allow execution using
+```
+chmod a+x get_ip.sh
+```
+Test that this works by running `./get_ip.sh`: it should print the current IP address.  If it doesn't, run the command `ip addr` and look for an IP address that isn't `127.0.0.1` (which is the local loopback address).  There may be more than one IP address -- you're looking for one that has tags 'global' and 'dynamic'.  Here is the output from one such device:
 ```
 root@rp-f0919a:~# ip addr
 1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1
@@ -39,22 +43,33 @@ root@rp-f0919a:~# ip addr
 3: sit0@NONE: <NOARP> mtu 1480 qdisc noop state DOWN group default qlen 1
     link/sit 0.0.0.0 brd 0.0.0.0
 ```
-In this case the one we want is the address `192.168.1.109`.  In this case, `get_ip.sh` will work because it looks for an IP address starting with `192.168`.  If your IP address starts with something else, you will need to edit the `get_ip.sh` file and change the numbers to reflect your particular network.
+In this case the one we want is the address `192.168.1.109` as it has scope 'global' and 'dynamic'  In this case, `get_ip.sh` will work because it looks for an IP address with the tag 'dynamic'.
 
-Finally, compile the C programs `fetchRAM.c` and `fetchFIFO.c` using `gcc -o fetchRAM fetchRAM.c` and `gcc -o fetchFIFO fetchFIFO.c`.  These will automatically be executable.
+Next, navigate back out to home directory using either `cd ..` or `cd ~`, and create a new directory called `data-acquisition` with the command `mkdir data-acquisition`.  Copy over all files ending in '.c' using either `scp` (from a terminal on your computer) or your favourite GUI (I recommend WinSCP for Windows) into this folder.  You will also need to copy over the file 'fpga/system_wrapper.bit' which is the device configuration file.  If using `scp` from the command line, navigate to the main project directory on your computer and use
+```
+scp fpga/system_wrapper.bit software/*.c root@rp-{MAC}.local:/root/
+```
+and give your password as necessary.  You can move these files to a different directory on the RP after they have been copied.
+
+Finally, compile the C programs `fetchRAM.c`, `fetchIQ.c`, and `fetchFIFO.c` using `gcc -o fetchRAM fetchRAM.c`, `gcc -o fetchIQ fetchIQ.c`, and `gcc -o fetchFIFO fetchFIFO.c`.  These will automatically be executable.
 
 ### After a reboot or power-on
 
-You will need to re-configure the FPGA and start the Python socket server after a reboot.  To re-configure the FPGA run the command
+You will need to re-configure the FPGA and start the Python socket server after a reboot.  Make sure you are in the directory with C files.  To re-configure the FPGA run the command
 ```
 cat system_wrapper.bit > /dev/xdevcfg
 ```
 
 To start the Python socket server run
 ```
-python3 appserver.py &
+python3 /root/server/appserver.py &
 ```
 This should print a line telling you the job number and process ID  as, for example, `[1] 5760`, and a line telling you that it is 'Listening on' and then an address and port number.  The program will not block the command line and will run in the background as long as the SSH session is active (The ampersand & at the end tells the shell to run the program in the background).  To stop the server, run the command `fg 1` where `1` is the job number and then hit 'CTRL-C' to send a keyboard interrupt.
+
+If you want to start the server and have it run without it stopping when the terminal window is closed, use the command
+```
+nohup python3 /root/server/appserver.py & disown
+```
 
 ### After starting/restarting the SSH session
 
@@ -64,12 +79,12 @@ ps -ef | grep appserver.py
 ```
 This will print out a list of processes that match the pattern `appserver.py`.  One of these might be the `grep` process itself -- not especially useful -- but one might be the socket server.  Here's an example output:
 ```
-root      5768  5738  7 00:59 pts/0    00:00:00 python3 appserver.py
+root      5768  5738  7 00:59 pts/0    00:00:00 python3 /root/server/appserver.py
 root      5775  5738  0 01:00 pts/0    00:00:00 grep --color=auto appserver.py
 ```
 The first entry is the actual socket server process and the second one is the `grep` process.  If you need to stop the server, and it is not in the jobs list (run using `jobs`), then you can kill the process using `kill -15 5768` where `5768` is the process ID of the process (the first number in the entry above).  
 
-If you want the server to run you don't need to do anything.  If the server is not running, start it using `python3 appserver.py`.  
+If you want the server to run you don't need to do anything.  If the server is not running, start it using `python3 /root/server/appserver.py`.  
 
 # Use
 
@@ -85,12 +100,14 @@ For the fast acquisition method there are four parameters of interest:
 For the slow acquisition method there is only the one parameter:
   - Log2 of the number of averages: This controls the number of averages/de-sampling of the incoming ADC data.  Data is de-sampled to a new rate of 125 MHz x 2^-N where N is setting of this parameter
 
-For lock-in detection we have 5 parameters of interest:
+For lock-in detection we have 6 parameters of interest:
   - Drive frequency: this is the frequency of the signal that is output by the DACs
   - Drive amplitude: this is a scaling factor between 0 and 1 which sets the amplitude of the output voltage
   - Demodulation frequency: this the frequency of the demodulation signal
   - Demodulation phase: this is the phase of the demodulation signal
   - CIC rate: this is the log-base-2 of the CIC decimation rate, which filters the demodulated data to eliminate the carrier and sidebands
+  - CIC shift: this is the amount to shift the outputs of the CIC filters to the right.  Normally, you should shift by 3*log2(CIC rate), but you can shift by less if you want to "amplify" the demodulated signal
+
 The I and Q components of the demodulated signal are stored in their own block memory using the same settings as for the fast acquisition mode
 
 Finally, there are 2 top-level parameters:
@@ -115,7 +132,7 @@ where `<IP address>` is the IP address of the Red Pitaya.  Accessible properties
   - numSamples: number of samples to acquire for the fast acquisition
   - log2AvgsSlow: log2 of the number of averages for the slow acquisition method
   - lastSample: 2 of these, these are *read only* parameters that indicates how many samples have been acquired by the fast method (1) or the lock-in (2).
-  - lockin: this is separate module for the lock-in detection system.  It has parameters 'driveFreq', 'demodFreq', 'demodPhase', 'cicRate', and 'driveAmp' which are explained above.
+  - lockin: this is separate module for the lock-in detection system.  It has parameters 'driveFreq', 'demodFreq', 'demodPhase', 'cicRate', 'driveAmp', and 'shift' which are explained above.
 
 In addition, there is the property `jumpers` which you should set to either `lv` or `hv` depending on the setting of the actual ADC input jumpers on the device.  Currently, the software only supports having both sets of jumpers set to the same value.
 
@@ -154,6 +171,7 @@ dev.getRAM(1000);%Fetch 1000 samples
 %Plot data
 plot(dev.t,dev.data,'.-');
 ```
+Data acquired using lock-in detection is stored in a separate memory than "fast" data.  To access this, use the method `getIQ()` rather than `getRAM()`.  
 
 You can acquire data through the slow method using the `getFIFO()` method.  For this method, you supply the number of samples that you want to record.  Make sure that the time it takes to acquire the data is less than the connection timeout; the connection timeout can be accessed and set using `dev.conn.timeout`.  Use this method like so:
 ```
