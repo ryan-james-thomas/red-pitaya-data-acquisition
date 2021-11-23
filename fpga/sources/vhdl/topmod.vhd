@@ -92,6 +92,24 @@ component QuickAvg is
     );
 end component;
 
+component CIC_Filter is
+    generic(
+        NUM_STAGES          :   natural :=  3;
+        MAX_SAMPLE_WIDTH    :   natural :=  16;
+        USE_SCALING         :   boolean :=  false 
+    );
+    port(
+        clk         :   in  std_logic;
+        aresetn     :   in  std_logic;
+        samples_i   :   in  unsigned;
+        scale_i     :   in  unsigned;
+        data_i      :   in  signed;
+        valid_i     :   in  std_logic;
+        data_o      :   out signed;  
+        valid_o     :   out std_logic
+    );
+end component;
+
 component FIFOHandler is
     port(
         wr_clk      :   in  std_logic;
@@ -154,7 +172,6 @@ signal saveLockIn_i     :   std_logic_vector(31 downto 0);
 signal inputSelect      :   std_logic;
 signal outputSelect     :   std_logic_vector(1 downto 0);
 signal dac_o            :   t_dac_array;
-
 --
 -- ADC signals
 --
@@ -162,7 +179,15 @@ signal adc_i            :   t_adc_array;
 signal adc_filt_i       :   t_adc_array;
 signal adc_f            :   t_adc_array;
 signal adc_s            :   t_adc_array;
+signal valid_f_o, valid_s_o :   std_logic_vector(1 downto 0);
 signal valid_f, valid_s :   std_logic;
+--
+-- Filter signals
+--
+signal fastSamples_i    :   unsigned(15 downto 0);
+signal fastScale_i      :   unsigned(7 downto 0);
+signal slowSamples_i    :   unsigned(19 downto 0);
+signal slowScale_i      :   unsigned(7 downto 0);
 --
 -- Memory signals
 --
@@ -253,17 +278,26 @@ ext_o <= (others => '0');
 --
 -- Average data
 --
-FastAvg: QuickAvg
-port map(
-    clk         =>  adcClk,
-    aresetn     =>  aresetn,
-    reg_i       =>  fastFiltReg,
-    enable_i    =>  '1',
-    adc_i       =>  adc_i,
-    valid_i     =>  '1',
-    adc_o       =>  adc_f,
-    valid_o     =>  valid_f
-);
+fastSamples_i <= unsigned(fastFiltReg(15 downto 0));
+fastScale_i <= unsigned(fastFiltReg(23 downto 16));
+FastFiltGen: for I in 0 to NUM_ADCS - 1 generate
+    FastFilt: CIC_Filter
+    generic map(
+        MAX_SAMPLE_WIDTH    =>  16
+    )
+    port map(
+        clk         =>  adcClk,
+        aresetn     =>  aresetn,
+        samples_i   =>  fastSamples_i,
+        scale_i     =>  fastScale_i,
+        data_i      =>  adc_i(I),
+        valid_i     =>  '1',
+        data_o      =>  adc_f(I),
+        valid_o     =>  valid_f_o(I)
+    );
+end generate FastFiltGen;
+valid_f <= valid_f_o(0) and valid_f_o(1);
+
 --
 -- Save data
 --
@@ -287,17 +321,25 @@ port map(
 -- Filter data for slow acquisition using FIFO
 --
 enableSlow <= fifoReg(0);
-SlowAvg: QuickAvg
-port map(
-    clk         =>  adcClk,
-    aresetn     =>  aresetn,
-    reg_i       =>  slowFiltReg,
-    enable_i    =>  enableSlow,
-    adc_i       =>  adc_i,
-    valid_i     =>  '1',
-    adc_o       =>  adc_s,
-    valid_o     =>  valid_s
-);
+slowSamples_i <= unsigned(slowFiltReg(19 downto 0));
+slowScale_i <= unsigned(slowFiltReg(27 downto 20));
+SlowFiltGen: for I in 0 to NUM_ADCS - 1 generate
+    SlowFilt: CIC_Filter
+    generic map(
+        MAX_SAMPLE_WIDTH    =>  20
+    )
+    port map(
+        clk         =>  adcClk,
+        aresetn     =>  aresetn,
+        samples_i   =>  slowSamples_i,
+        scale_i     =>  slowScale_i,
+        data_i      =>  adc_i(I),
+        valid_i     =>  '1',
+        data_o      =>  adc_s(I),
+        valid_o     =>  valid_s_o(I)
+    );
+end generate SlowFiltGen;
+valid_s <= enableSlow and valid_s_o(0) and valid_s_o(1);
 --
 -- Save data into FIFO
 --

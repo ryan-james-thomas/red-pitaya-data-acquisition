@@ -10,10 +10,12 @@ classdef DataAcquisition < handle
         trigEdge        %Edge for triggering fast acquisition
         inputSelect     %Input selector for lock-in detection
         outputSelect    %Output selector for manual or lock-in output routed to DACs
-        log2AvgsFast    %Log2(#avgs) for fast acquisition
+        filtSamplesFast %Number of samples in fast CIC filtering
+        shiftFast       %Shift-right of the post-filtered fast signals
         delay           %Delay between trigger and start of fast acquistion
         numSamples      %Number of samples for fast acquisition
-        log2AvgsSlow    %Log2(#avgs) for slow acquisition
+        filtSamplesSlow %Number of samples in slow CIC filtering
+        shiftSlow       %Shift-right of the post-filtered slow-signals
         holdOff         %Trigger hold off
         dac             %DAC outputs (2 element array)
         lockin          %Lock-in control
@@ -101,8 +103,9 @@ classdef DataAcquisition < handle
                 .setLimits('lower',0,'upper',1);
             self.outputSelect = DeviceParameter([2,3],self.topReg)...
                 .setLimits('lower',0,'upper',3);
-            self.log2AvgsFast = DeviceParameter([0,4],self.fastFiltReg)...
-                .setLimits('lower',0,'upper',31);
+            self.filtSamplesFast = DeviceParameter([0,15],self.fastFiltReg)...
+                .setLimits('lower',0,'upper',2^16 - 1);
+            self.shiftFast = DeviceParameter([])
             self.delay = DeviceParameter([0,31],self.delayReg)...
                 .setLimits('lower',64e-9,'upper',(2^32-1)/self.CLK)...
                 .setFunctions('to',@(x) x*self.CLK,'from',@(x) x/self.CLK);
