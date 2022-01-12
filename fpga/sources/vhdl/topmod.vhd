@@ -177,6 +177,7 @@ signal memTrig      :   std_logic;
 -- Trigger signals
 --
 signal trigEdge     :   std_logic;
+signal trigEnable   :   std_logic;
 signal trig_i       :   std_logic;
 signal trigSync     :   std_logic_vector(1 downto 0);
 signal delay        :   unsigned(31 downto 0);
@@ -195,6 +196,10 @@ signal fifo_s       :   t_fifo_bus_slave;
 signal fifo_i       :   std_logic_vector(FIFO_WIDTH - 1 downto 0);
 signal validFifo_i  :   std_logic;
 signal enableSlow   :   std_logic;
+--
+-- Additional signals
+--
+signal extReg       :   t_param_reg;
 
 begin
 --
@@ -203,6 +208,7 @@ begin
 trigEdge <= topReg(0);
 inputSelect <= topReg(1);
 outputSelect <= topReg(3 downto 2);
+trigEnable <= topReg(4);
 --
 -- Create ADC data
 --
@@ -249,7 +255,8 @@ dac_o(0) <= signed(dacReg(15 downto 0)) when outputSelect(0) = '0' else lockin_d
 dac_o(1) <= signed(dacReg(31 downto 16)) when outputSelect(1) = '0' else lockin_dac_o;
 m_axis_tdata <= dac_to_slv(dac_o);
 m_axis_tvalid <= '1';
-ext_o <= (others => '0');
+--ext_o <= (others => '0');
+ext_o <= extReg(7 downto 0);
 --
 -- Average data
 --
@@ -268,7 +275,7 @@ port map(
 -- Save data
 --
 saveData_i <= adc_to_slv(adc_f);
-memTrig <= ext_i(7) or triggers(0);
+memTrig <= (ext_i(7) and trigEnable) or triggers(0);
 SaveData: SaveADCData
 port map(
     readClk     =>  sysClk,
@@ -404,6 +411,10 @@ begin
                             when X"000044" => rw(bus_m,bus_s,comState,lockinRegs(1));
                             when X"000048" => rw(bus_m,bus_s,comState,lockinRegs(2));
                             when X"00004C" => rw(bus_m,bus_s,comState,lockinRegs(3));
+                            --
+                            -- External outputs
+                            --
+                            when X"000050" => rw(bus_m,bus_s,comState,extReg);
                             when others => 
                                 comState <= finishing;
                                 bus_s.resp <= "11";

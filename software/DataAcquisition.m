@@ -8,6 +8,7 @@ classdef DataAcquisition < handle
     properties(SetAccess = immutable)
         conn            %Connection client object
         trigEdge        %Edge for triggering fast acquisition
+        trigEnable      %Enable external triggering
         inputSelect     %Input selector for lock-in detection
         outputSelect    %Output selector for manual or lock-in output routed to DACs
         log2AvgsFast    %Log2(#avgs) for fast acquisition
@@ -19,6 +20,7 @@ classdef DataAcquisition < handle
         holdOff         %Trigger hold off
         dac             %DAC outputs (2 element array)
         lockin          %Lock-in control
+        ext_o           %External output control
     end
     
     properties(SetAccess = protected)
@@ -33,6 +35,7 @@ classdef DataAcquisition < handle
         holdOffReg      %Tigger hold off register
         adcReg          %ADC register
         lockInRegs      %4-element lock-in registers
+        extReg          %External digital output register
     end
     
     properties(Constant)
@@ -94,10 +97,13 @@ classdef DataAcquisition < handle
             for nn = 0:3
                 self.lockInRegs(nn + 1) = DeviceRegister(hex2dec('40') + nn*4,self.conn);
             end
+            self.extReg = DeviceRegister('50',self.conn);
             %
             % Fast-filtering parameters
             %
             self.trigEdge = DeviceParameter([0,0],self.topReg)...
+                .setLimits('lower',0,'upper',1);
+            self.trigEnable = DeviceParameter([4,4],self.topReg)...
                 .setLimits('lower',0,'upper',1);
             self.inputSelect = DeviceParameter([1,1],self.topReg)...
                 .setLimits('lower',0,'upper',1);
@@ -135,7 +141,10 @@ classdef DataAcquisition < handle
             % Lock-in control
             %
             self.lockin = DataAcquisitionLockInControl(self,self.lockInRegs);
-            
+            %
+            % External outputs
+            %
+            self.ext_o = DeviceParameter([0,7],self.extReg);
         end
         
         function self = setDefaults(self,varargin)
@@ -143,6 +152,7 @@ classdef DataAcquisition < handle
             %
             %   SELF = SETDEFAULTS(SELF) sets default values for SELF
             self.trigEdge.set(1);
+            self.trigEnable.set(1);
             self.inputSelect.set(0);
             self.outputSelect.set(0);
             self.log2AvgsFast.set(0);
@@ -155,6 +165,7 @@ classdef DataAcquisition < handle
             self.dac(1).set(0);
             self.dac(2).set(0);
             self.lockin.setDefaults;
+            self.extReg.set(0);
         end
         
         function self = check(self)
@@ -185,6 +196,7 @@ classdef DataAcquisition < handle
             self.dacReg.write;
             self.conn.keepAlive = false;
             self.lockInRegs.write;
+            self.extReg.write;
         end
         
         function self = fetch(self)
@@ -205,6 +217,7 @@ classdef DataAcquisition < handle
             self.slowFiltReg.read;
             self.dacReg.read;
             self.lockInRegs.read;
+            self.extReg.read;
             self.conn.keepAlive = false;
             self.lastSample.read;
             %
@@ -224,6 +237,7 @@ classdef DataAcquisition < handle
                 self.dac(nn).get;
             end
             self.lockin.get;
+            self.ext_o.get;
         end
         
         function self = start(self)

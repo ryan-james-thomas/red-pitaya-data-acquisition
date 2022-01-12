@@ -92,13 +92,16 @@ There are two separate methods of storing acquired data in this design: fixed-le
 
 For the fast acquisition method there are four parameters of interest:
   - Trigger edge: edge of trigger to use: either rising or falling edge
+  - Trigger enable: enables external triggering: set to 0 to disable and 1 to enable
   - Log2 of the number of averages: This controls the number of averages/de-sampling of the incoming ADC data.  Data is de-sampled to a new rate of 125 MHz x 2^-N where N is setting of this parameter
+  - Bit-shift left for fast acquisition: Effective digital gain after averaging. Shifts averaged results N bits to the left
   - Acquisition delay: This is the delay between when the trigger arrives and when the acquisition starts
   - Number of samples: This is the number of samples to acquire.
   - Trigger hold-off: This sets the dead time during which no triggers are accepted.
 
 For the slow acquisition method there is only the one parameter:
   - Log2 of the number of averages: This controls the number of averages/de-sampling of the incoming ADC data.  Data is de-sampled to a new rate of 125 MHz x 2^-N where N is setting of this parameter
+  - Bit-shift left for slow acquisition: Effective digital gain after averaging. Shifts averaged results N bits to the left
 
 For lock-in detection we have 6 parameters of interest:
   - Drive frequency: this is the frequency of the signal that is output by the DACs
@@ -110,9 +113,13 @@ For lock-in detection we have 6 parameters of interest:
 
 The I and Q components of the demodulated signal are stored in their own block memory using the same settings as for the fast acquisition mode
 
-Finally, there are 2 top-level parameters:
+There are also 2 top-level parameters:
   - Input selector: this selects which ADC is used for the lock-in detection: 0 for ADC1 and 1 for ADC2
   - Output selector: one for each channel, sets whether the output of the DAC is a fixed voltage (for debugging) or the output of the lock-in DDS.
+
+Finally, there are some auxiliary parameters:
+  - DAC values: there are two DACs whose voltage can be set to within the range +/- 1 V when they are not used for modulation
+  - External digital outputs: The external outputs on DIO*_P connectors can be accessed.
 
 These parameters can be accessed via the memory-mapped AXI interface, or, alternatively, via the provided remote MATLAB interface.
 
@@ -124,15 +131,20 @@ dev = DataAcquisition(<IP address>);
 ```
 where `<IP address>` is the IP address of the Red Pitaya.  Accessible properties are
   - trigEdge: Trigger edge to use: 0 for falling edge, 1 for rising edge
+  - trigEnable: Enables external trigger: use 0 to disable, 1 to eneable.
   - inputSelect: Selects with ADC to use for lock-in. ADC1 is 0 and ADC2 is 1
   - outputSelect: One for each DAC, these select whether a fixed voltage is applied or the lock-in DDS is used for the output voltage
   - holdOff: trigger hold off in seconds
   - log2AvgsFast: log2 of the number of averages for the fast acquisition method
+  - shiftFast: shifts fast averaged signals N bits to the left.
   - delay: delay between trigger and start of acquisition.  Must be larger than 64 ns
   - numSamples: number of samples to acquire for the fast acquisition
   - log2AvgsSlow: log2 of the number of averages for the slow acquisition method
+  - shiftSlow: shifts slow averaged signals N bits to the left.
   - lastSample: 2 of these, these are *read only* parameters that indicates how many samples have been acquired by the fast method (1) or the lock-in (2).
   - lockin: this is separate module for the lock-in detection system.  It has parameters 'driveFreq', 'demodFreq', 'demodPhase', 'cicRate', 'driveAmp', and 'shift' which are explained above.
+  - dac(1:2): there are two DACs.  Set to voltages +/-1 V. These are output when the corresponding 'outputSelect' value is 0
+  - ext_0: 8-bit unsigned integer representation of the digital outputs on DIO*_P connectors.
 
 In addition, there is the property `jumpers` which you should set to either `lv` or `hv` depending on the setting of the actual ADC input jumpers on the device.  Currently, the software only supports having both sets of jumpers set to the same value.
 
