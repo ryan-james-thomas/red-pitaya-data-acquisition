@@ -37,6 +37,7 @@ constant EXT_WIDTH  :   natural :=  ADC_WIDTH + PADDING;
 --
 signal log2Avgs     :   natural range 0 to 31   :=  0;
 signal numAvgs      :   unsigned(31 downto 0)   :=  to_unsigned(1,32);
+signal shift        :   natural range 0 to 31   :=  0;
 --
 -- Counter for averaging
 --
@@ -51,6 +52,7 @@ begin
 -- Parse parameters
 --
 log2Avgs <= to_integer(unsigned(reg_i(4 downto 0)));
+shift <= to_integer(unsigned(reg_i(10 downto 5)));
 numAvgs <= shift_left(to_unsigned(1,numAvgs'length),log2Avgs);
 --
 -- Split input signal into the two channels as signed integers
@@ -105,8 +107,8 @@ begin
                 -- When averaging, this is the last count value before output
                 -- So the output data is the last adc%d value plus the current input
                 --
-                adc_o(0) <= resize(shift_right(adc1 + adc1_tmp,log2Avgs),ADC_WIDTH);
-                adc_o(1) <= resize(shift_right(adc2 + adc2_tmp,log2Avgs),ADC_WIDTH);
+                adc_o(0) <= resize(shift_right(adc1 + adc1_tmp,log2Avgs - shift),ADC_WIDTH);
+                adc_o(1) <= resize(shift_right(adc2 + adc2_tmp,log2Avgs - shift),ADC_WIDTH);
                 valid_o <= '1';
                 avgCount <= (others => '0');
             else

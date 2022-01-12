@@ -11,9 +11,11 @@ classdef DataAcquisition < handle
         inputSelect     %Input selector for lock-in detection
         outputSelect    %Output selector for manual or lock-in output routed to DACs
         log2AvgsFast    %Log2(#avgs) for fast acquisition
+        shiftFast       %Additional shift left for averaged signals on fast acquisition
         delay           %Delay between trigger and start of fast acquistion
         numSamples      %Number of samples for fast acquisition
         log2AvgsSlow    %Log2(#avgs) for slow acquisition
+        shiftSlow       %Additional shift left for averaged signals on slow acquisition
         holdOff         %Trigger hold off
         dac             %DAC outputs (2 element array)
         lockin          %Lock-in control
@@ -103,6 +105,8 @@ classdef DataAcquisition < handle
                 .setLimits('lower',0,'upper',3);
             self.log2AvgsFast = DeviceParameter([0,4],self.fastFiltReg)...
                 .setLimits('lower',0,'upper',31);
+            self.shiftFast = DeviceParameter([5,10],self.fastFiltReg)...
+                .setLimits('lower',0,'upper',10);
             self.delay = DeviceParameter([0,31],self.delayReg)...
                 .setLimits('lower',64e-9,'upper',(2^32-1)/self.CLK)...
                 .setFunctions('to',@(x) x*self.CLK,'from',@(x) x/self.CLK);
@@ -116,6 +120,8 @@ classdef DataAcquisition < handle
             %
             self.log2AvgsSlow = DeviceParameter([0,4],self.slowFiltReg)...
                 .setLimits('lower',0,'upper',31);
+            self.shiftSlow = DeviceParameter([5,10],self.slowFiltReg)...
+                .setLimits('lower',0,'upper',10);
             %
             % DAC output
             %
@@ -140,10 +146,12 @@ classdef DataAcquisition < handle
             self.inputSelect.set(0);
             self.outputSelect.set(0);
             self.log2AvgsFast.set(0);
+            self.shiftFast.set(0);
             self.delay.set(100e-9);
             self.numSamples.set(100);
             self.holdOff.set(10e-3);
             self.log2AvgsSlow.set(10);
+            self.shiftSlow.set(0);
             self.dac(1).set(0);
             self.dac(2).set(0);
             self.lockin.setDefaults;
@@ -206,10 +214,12 @@ classdef DataAcquisition < handle
             self.inputSelect.get;
             self.outputSelect.get;
             self.log2AvgsFast.get;
+            self.shiftFast.get;
             self.delay.get;
             self.numSamples.get;
             self.holdOff.get;
             self.log2AvgsSlow.get;
+            self.shiftSlow.get;
             for nn = 1:numel(self.dac)
                 self.dac(nn).get;
             end
@@ -370,9 +380,11 @@ classdef DataAcquisition < handle
             self.inputSelect.print('Input select',strwidth,'%d');
             self.outputSelect.print('Output select',strwidth','%d');
             self.log2AvgsFast.print('Log 2 # Avgs (Fast)',strwidth,'%d');
+            self.shiftFast.print('Fast shift left',strwidth,'%d');
             self.delay.print('Delay',strwidth,'%.3e','s');
             self.numSamples.print('Number of samples',strwidth,'%d');
             self.log2AvgsSlow.print('Log 2 # Avgs (Slow)',strwidth,'%d');
+            self.shiftSlow.print('Slow shift left',strwidth,'%d');
             self.dac(1).print('DAC 1',strwidth,'%.3f','V');
             self.dac(2).print('DAC 2',strwidth,'%.3f','V');
             self.lockin.print(strwidth);
