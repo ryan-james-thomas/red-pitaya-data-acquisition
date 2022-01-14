@@ -8,15 +8,19 @@ classdef DataAcquisition < handle
     properties(SetAccess = immutable)
         conn            %Connection client object
         trigEdge        %Edge for triggering fast acquisition
+        trigEnable      %Enable external triggering
         inputSelect     %Input selector for lock-in detection
         outputSelect    %Output selector for manual or lock-in output routed to DACs
         log2AvgsFast    %Log2(#avgs) for fast acquisition
+        shiftFast       %Additional shift left for averaged signals on fast acquisition
         delay           %Delay between trigger and start of fast acquistion
         numSamples      %Number of samples for fast acquisition
         log2AvgsSlow    %Log2(#avgs) for slow acquisition
+        shiftSlow       %Additional shift left for averaged signals on slow acquisition
         holdOff         %Trigger hold off
         dac             %DAC outputs (2 element array)
         lockin          %Lock-in control
+        ext_o           %External output control
     end
     
     properties(SetAccess = protected)
@@ -31,6 +35,7 @@ classdef DataAcquisition < handle
         holdOffReg      %Tigger hold off register
         adcReg          %ADC register
         lockInRegs      %4-element lock-in registers
+        extReg          %External digital output register
     end
     
     properties(Constant)
@@ -92,10 +97,13 @@ classdef DataAcquisition < handle
             for nn = 0:3
                 self.lockInRegs(nn + 1) = DeviceRegister(hex2dec('40') + nn*4,self.conn);
             end
+            self.extReg = DeviceRegister('50',self.conn);
             %
             % Fast-filtering parameters
             %
             self.trigEdge = DeviceParameter([0,0],self.topReg)...
+                .setLimits('lower',0,'upper',1);
+            self.trigEnable = DeviceParameter([4,4],self.topReg)...
                 .setLimits('lower',0,'upper',1);
             self.inputSelect = DeviceParameter([1,1],self.topReg)...
                 .setLimits('lower',0,'upper',1);
@@ -103,6 +111,8 @@ classdef DataAcquisition < handle
                 .setLimits('lower',0,'upper',3);
             self.log2AvgsFast = DeviceParameter([0,4],self.fastFiltReg)...
                 .setLimits('lower',0,'upper',31);
+            self.shiftFast = DeviceParameter([5,10],self.fastFiltReg)...
+                .setLimits('lower',0,'upper',10);
             self.delay = DeviceParameter([0,31],self.delayReg)...
                 .setLimits('lower',64e-9,'upper',(2^32-1)/self.CLK)...
                 .setFunctions('to',@(x) x*self.CLK,'from',@(x) x/self.CLK);
@@ -116,6 +126,8 @@ classdef DataAcquisition < handle
             %
             self.log2AvgsSlow = DeviceParameter([0,4],self.slowFiltReg)...
                 .setLimits('lower',0,'upper',31);
+            self.shiftSlow = DeviceParameter([5,10],self.slowFiltReg)...
+                .setLimits('lower',0,'upper',10);
             %
             % DAC output
             %
@@ -129,7 +141,10 @@ classdef DataAcquisition < handle
             % Lock-in control
             %
             self.lockin = DataAcquisitionLockInControl(self,self.lockInRegs);
-            
+            %
+            % External outputs
+            %
+            self.ext_o = DeviceParameter([0,7],self.extReg);
         end
         
         function self = setDefaults(self,varargin)
@@ -137,16 +152,20 @@ classdef DataAcquisition < handle
             %
             %   SELF = SETDEFAULTS(SELF) sets default values for SELF
             self.trigEdge.set(1);
+            self.trigEnable.set(1);
             self.inputSelect.set(0);
             self.outputSelect.set(0);
             self.log2AvgsFast.set(0);
+            self.shiftFast.set(0);
             self.delay.set(100e-9);
             self.numSamples.set(100);
             self.holdOff.set(10e-3);
             self.log2AvgsSlow.set(10);
+            self.shiftSlow.set(0);
             self.dac(1).set(0);
             self.dac(2).set(0);
             self.lockin.setDefaults;
+            self.extReg.set(0);
         end
         
         function self = check(self)
@@ -177,6 +196,7 @@ classdef DataAcquisition < handle
             self.dacReg.write;
             self.conn.keepAlive = false;
             self.lockInRegs.write;
+            self.extReg.write;
         end
         
         function self = fetch(self)
@@ -197,6 +217,7 @@ classdef DataAcquisition < handle
             self.slowFiltReg.read;
             self.dacReg.read;
             self.lockInRegs.read;
+            self.extReg.read;
             self.conn.keepAlive = false;
             self.lastSample.read;
             %
@@ -206,14 +227,17 @@ classdef DataAcquisition < handle
             self.inputSelect.get;
             self.outputSelect.get;
             self.log2AvgsFast.get;
+            self.shiftFast.get;
             self.delay.get;
             self.numSamples.get;
             self.holdOff.get;
             self.log2AvgsSlow.get;
+            self.shiftSlow.get;
             for nn = 1:numel(self.dac)
                 self.dac(nn).get;
             end
             self.lockin.get;
+            self.ext_o.get;
         end
         
         function self = start(self)
@@ -370,9 +394,11 @@ classdef DataAcquisition < handle
             self.inputSelect.print('Input select',strwidth,'%d');
             self.outputSelect.print('Output select',strwidth','%d');
             self.log2AvgsFast.print('Log 2 # Avgs (Fast)',strwidth,'%d');
+            self.shiftFast.print('Fast shift left',strwidth,'%d');
             self.delay.print('Delay',strwidth,'%.3e','s');
             self.numSamples.print('Number of samples',strwidth,'%d');
             self.log2AvgsSlow.print('Log 2 # Avgs (Slow)',strwidth,'%d');
+            self.shiftSlow.print('Slow shift left',strwidth,'%d');
             self.dac(1).print('DAC 1',strwidth,'%.3f','V');
             self.dac(2).print('DAC 2',strwidth,'%.3f','V');
             self.lockin.print(strwidth);
