@@ -165,7 +165,7 @@ classdef DataAcquisition < handle
             self.dac(1).set(0);
             self.dac(2).set(0);
             self.lockin.setDefaults;
-            self.extReg.set(0);
+%             self.ext_o.set(0);
         end
         
         function self = check(self)
@@ -196,7 +196,7 @@ classdef DataAcquisition < handle
             self.dacReg.write;
             self.conn.keepAlive = false;
             self.lockInRegs.write;
-            self.extReg.write;
+%             self.extReg.write;
         end
         
         function self = fetch(self)
@@ -217,7 +217,7 @@ classdef DataAcquisition < handle
             self.slowFiltReg.read;
             self.dacReg.read;
             self.lockInRegs.read;
-            self.extReg.read;
+%             self.extReg.read;
             self.conn.keepAlive = false;
             self.lastSample.read;
             %
@@ -237,7 +237,7 @@ classdef DataAcquisition < handle
                 self.dac(nn).get;
             end
             self.lockin.get;
-            self.ext_o.get;
+%             self.ext_o.get;
         end
         
         function self = start(self)
@@ -391,6 +391,7 @@ classdef DataAcquisition < handle
             fprintf(1,'\t ----------------------------------\n');
             fprintf(1,'\t Parameters\n');
             self.trigEdge.print('Trigger edge',strwidth,'%d');
+            self.trigEnable.print('Trigger enable',strwidth,'%d');
             self.inputSelect.print('Input select',strwidth,'%d');
             self.outputSelect.print('Output select',strwidth','%d');
             self.log2AvgsFast.print('Log 2 # Avgs (Fast)',strwidth,'%d');
@@ -402,6 +403,7 @@ classdef DataAcquisition < handle
             self.dac(1).print('DAC 1',strwidth,'%.3f','V');
             self.dac(2).print('DAC 2',strwidth,'%.3f','V');
             self.lockin.print(strwidth);
+            self.ext_o.print('External outputs',strwidth,'%d');
         end
         
         function r = rotate(self,ph,v)
