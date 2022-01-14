@@ -11,6 +11,7 @@ entity LockInDetector is
         --
         clk         :   in  std_logic;
         aresetn     :   in  std_logic;
+        reset_i     :   in  std_logic;
         --
         -- Control
         --
@@ -105,6 +106,7 @@ signal dds_multiplier   :   std_logic_vector(7 downto 0);
 signal dds_mult_o       :   std_logic_vector(19 downto 0);
 signal dds_mix_o        :   std_logic_vector(31 downto 0);   
 signal dds_sin, dds_cos :   std_logic_vector(DDS_OUT_WIDTH - 1 downto 0);
+signal dds_reset        :   std_logic;
 --
 -- Multiplier signals
 --
@@ -130,11 +132,11 @@ freq(0) <= regs_i(0);
 freq(1) <= regs_i(1);
 phase <= regs_i(2);
 dds_multiplier <= regs_i(3)(7 downto 0);
-
+dds_reset <= aresetn and not(reset_i);
 FixedPhase: DDS_Fixed_Phase
 port map(
     aclk                =>  clk,
-    aresetn             =>  aresetn,
+    aresetn             =>  dds_reset,
     s_axis_phase_tvalid =>  '1',
     s_axis_phase_tdata  =>  std_logic_vector(freq(0)),
     m_axis_data_tvalid  =>  open,
@@ -159,7 +161,7 @@ dds_phase_i <= phase & freq(1);
 StreamPhase: DDS_Stream_Phase
 port map(
     aclk                =>  clk,
-    aresetn             =>  aresetn,
+    aresetn             =>  reset_i,
     s_axis_phase_tvalid =>  '1',
     s_axis_phase_tdata  =>  dds_phase_i,
     m_axis_data_tvalid  =>  open,

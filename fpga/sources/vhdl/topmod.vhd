@@ -58,6 +58,7 @@ component LockInDetector is
         --
         clk         :   in  std_logic;
         aresetn     :   in  std_logic;
+        reset_i     :   in  std_logic;
         --
         -- Control
         --
@@ -144,6 +145,7 @@ signal slowFiltReg          :   t_param_reg;
 --
 -- Lock in signals
 --
+signal dds_reset        :   std_logic;
 signal lockinRegs       :   t_param_reg_array(3 downto 0);
 signal lockin_dac_o     :   t_dac;
 signal lockin_data_i    :   t_adc;
@@ -218,11 +220,12 @@ adc_i(1) <= signed(adcData_i(31 downto 16));
 -- Lock-in detection
 --
 lockin_data_i <= adc_i(0) when inputSelect = '0' else adc_i(1);
-
+dds_reset <= triggers(1);
 LockIn: LockInDetector
 port map(
     clk         =>  adcClk,
     aresetn     =>  aresetn,
+    reset_i     =>  dds_reset,
     regs_i      =>  lockinRegs,
     dac_o       =>  lockin_dac_o,
     data_i      =>  lockin_data_i,
