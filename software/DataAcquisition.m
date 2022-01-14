@@ -378,6 +378,25 @@ classdef DataAcquisition < handle
             self.lockin.print(strwidth);
         end
         
+        function r = rotate(self,ph,v)
+            if nargin == 2
+                v = self.data;
+            end
+            ph = -ph;
+            r(:,1) = cosd(ph)*v(:,1) + sind(ph)*v(:,2);
+            r(:,2) = -sind(ph)*v(:,1) + cosd(ph)*v(:,2);
+        end
+        
+        function r = getOptimumPhase(self,v)
+            if nargin == 1
+                v = self.data;
+            end
+            I = v(:,1) - mean(v(1:1e2,1));
+            Q = v(:,2) - mean(v(1:1e2,2));
+            f = @(ph) -sum((cosd(ph)*I + sind(ph)*Q).^2);
+            r = -fminbnd(f,0,360);
+        end
+        
         
     end
     
