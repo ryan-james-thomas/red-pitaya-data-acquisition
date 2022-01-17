@@ -391,6 +391,7 @@ classdef DataAcquisition < handle
             fprintf(1,'\t ----------------------------------\n');
             fprintf(1,'\t Parameters\n');
             self.trigEdge.print('Trigger edge',strwidth,'%d');
+            self.trigEnable.print('Trigger enable',strwidth,'%d');
             self.inputSelect.print('Input select',strwidth,'%d');
             self.outputSelect.print('Output select',strwidth','%d');
             self.log2AvgsFast.print('Log 2 # Avgs (Fast)',strwidth,'%d');
@@ -402,6 +403,7 @@ classdef DataAcquisition < handle
             self.dac(1).print('DAC 1',strwidth,'%.3f','V');
             self.dac(2).print('DAC 2',strwidth,'%.3f','V');
             self.lockin.print(strwidth);
+            self.ext_o.print('Digital outputs',strwidth,'%02x');
         end
         
         
