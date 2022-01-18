@@ -165,7 +165,7 @@ classdef DataAcquisition < handle
             self.dac(1).set(0);
             self.dac(2).set(0);
             self.lockin.setDefaults;
-%             self.ext_o.set(0);
+            self.ext_o.set(0);
         end
         
         function self = check(self)
@@ -196,7 +196,7 @@ classdef DataAcquisition < handle
             self.dacReg.write;
             self.conn.keepAlive = false;
             self.lockInRegs.write;
-%             self.extReg.write;
+            self.extReg.write;
         end
         
         function self = fetch(self)
@@ -224,6 +224,7 @@ classdef DataAcquisition < handle
             % Get parameter data from registers
             %
             self.trigEdge.get;
+            self.trigEnable.get;
             self.inputSelect.get;
             self.outputSelect.get;
             self.log2AvgsFast.get;
@@ -237,7 +238,7 @@ classdef DataAcquisition < handle
                 self.dac(nn).get;
             end
             self.lockin.get;
-%             self.ext_o.get;
+            self.ext_o.get;
         end
         
         function self = start(self)
@@ -403,7 +404,7 @@ classdef DataAcquisition < handle
             self.dac(1).print('DAC 1',strwidth,'%.3f','V');
             self.dac(2).print('DAC 2',strwidth,'%.3f','V');
             self.lockin.print(strwidth);
-            self.ext_o.print('External outputs',strwidth,'%d');
+            self.ext_o.print('Digital outputs',strwidth,'%02x');
         end
         
         function r = rotate(self,ph,v)

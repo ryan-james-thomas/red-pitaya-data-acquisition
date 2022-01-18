@@ -58,6 +58,7 @@ component LockInDetector is
         --
         clk         :   in  std_logic;
         aresetn     :   in  std_logic;
+        reset_i     :   in  std_logic;
         --
         -- Control
         --
@@ -144,6 +145,7 @@ signal slowFiltReg          :   t_param_reg;
 --
 -- Lock in signals
 --
+signal dds_reset        :   std_logic;
 signal lockinRegs       :   t_param_reg_array(3 downto 0);
 signal lockin_dac_o     :   t_dac;
 signal lockin_data_i    :   t_adc;
@@ -218,11 +220,12 @@ adc_i(1) <= signed(adcData_i(31 downto 16));
 -- Lock-in detection
 --
 lockin_data_i <= adc_i(0) when inputSelect = '0' else adc_i(1);
-
+dds_reset <= triggers(1);
 LockIn: LockInDetector
 port map(
     clk         =>  adcClk,
     aresetn     =>  aresetn,
+    reset_i     =>  dds_reset,
     regs_i      =>  lockinRegs,
     dac_o       =>  lockin_dac_o,
     data_i      =>  lockin_data_i,
@@ -337,10 +340,10 @@ begin
         reset <= '0';
         bus_s <= INIT_AXI_BUS_SLAVE;
         triggers <= (others => '0');
-        topReg <= (others => '0');
+        topReg <= (0 => '1', 4 => '1', others => '0');
         dacReg <= (others => '0');
-        delay <= (others => '0');
-        numSamples <= (0 => '1', others => '0');
+        delay <= to_unsigned(100,delay'length);
+        numSamples <= to_unsigned(16380,numSamples'length);
         fastFiltReg <= (others => '0');
         slowFiltReg <= (others => '0');
         fifo_m <= INIT_FIFO_BUS_MASTER;
