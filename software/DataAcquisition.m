@@ -224,6 +224,7 @@ classdef DataAcquisition < handle
             % Get parameter data from registers
             %
             self.trigEdge.get;
+            self.trigEnable.get;
             self.inputSelect.get;
             self.outputSelect.get;
             self.log2AvgsFast.get;

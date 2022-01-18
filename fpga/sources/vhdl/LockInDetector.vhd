@@ -161,7 +161,7 @@ dds_phase_i <= phase & freq(1);
 StreamPhase: DDS_Stream_Phase
 port map(
     aclk                =>  clk,
-    aresetn             =>  reset_i,
+    aresetn             =>  dds_reset,
     s_axis_phase_tvalid =>  '1',
     s_axis_phase_tdata  =>  dds_phase_i,
     m_axis_data_tvalid  =>  open,

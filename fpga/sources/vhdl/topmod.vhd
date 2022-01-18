@@ -340,10 +340,10 @@ begin
         reset <= '0';
         bus_s <= INIT_AXI_BUS_SLAVE;
         triggers <= (others => '0');
-        topReg <= (others => '0');
+        topReg <= (0 => '1', 4 => '1', others => '0');
         dacReg <= (others => '0');
-        delay <= (others => '0');
-        numSamples <= (0 => '1', others => '0');
+        delay <= to_unsigned(100,delay'length);
+        numSamples <= to_unsigned(16380,numSamples'length);
         fastFiltReg <= (others => '0');
         slowFiltReg <= (others => '0');
         fifo_m <= INIT_FIFO_BUS_MASTER;
