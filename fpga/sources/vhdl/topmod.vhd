@@ -127,6 +127,22 @@ component SaveADCData is
     );
 end component;
 
+component DigitalPatternGenerator is
+    port(
+        wrclk       :   in  std_logic;
+        rdclk       :   in  std_logic;
+        aresetn     :   in  std_logic;
+        reset_i     :   in  std_logic;
+
+        data_i      :   in  t_param_reg;
+        valid_i     :   in  std_logic;
+
+        start_i     :   in  std_logic;
+        debug_o     :   out t_param_reg;
+        data_o      :   out t_dpg
+    );
+end component;
+
 --
 -- AXI communication signals
 --
@@ -151,6 +167,7 @@ signal lockin_dac_o     :   t_dac;
 signal lockin_data_i    :   t_adc;
 signal lockin_data_o    :   t_adc_array;
 signal lockin_valid_o   :   std_logic_vector(1 downto 0);
+signal lockin_valid_i   :   std_logic;
 signal saveLockIn_i     :   std_logic_vector(31 downto 0);
 
 signal inputSelect      :   std_logic;
@@ -164,7 +181,8 @@ signal adc_i            :   t_adc_array;
 signal adc_filt_i       :   t_adc_array;
 signal adc_f            :   t_adc_array;
 signal adc_s            :   t_adc_array;
-signal valid_f, valid_s :   std_logic;
+signal valid_f_i, valid_s_i :   std_logic;
+signal valid_f_o, valid_s_o :   std_logic;
 --
 -- Memory signals
 --
@@ -202,6 +220,16 @@ signal enableSlow   :   std_logic;
 -- Additional signals
 --
 signal extReg       :   t_param_reg;
+--
+-- Digital pattern generator signals
+--
+signal dpg_data_i   :   t_param_reg;
+signal dpg_valid_i  :   std_logic;
+signal dpg_reset_i  :   std_logic;
+signal dpg_trig_i   :   std_logic;
+signal dpg_o        :   t_dpg;
+signal enableGating :   std_logic_vector(2 downto 0);
+signal dpg_debug_o  :   t_param_reg;
 
 begin
 --
@@ -211,6 +239,7 @@ trigEdge <= topReg(0);
 inputSelect <= topReg(1);
 outputSelect <= topReg(3 downto 2);
 trigEnable <= topReg(4);
+enableGating <= topReg(7 downto 5);
 --
 -- Create ADC data
 --
@@ -235,14 +264,15 @@ port map(
 );
 
 saveLockIn_i <= adc_to_slv(lockin_data_o);
-
+lockin_valid_i <=   lockin_valid_o(0) when enableGating(0) = '0' else
+                    lockin_valid_o(0) and dpg_o.data(0);
 SaveDataLockin: SaveADCData
 port map(
     readClk     =>  sysClk,
     writeClk    =>  adcClk,
     aresetn     =>  aresetn,
     data_i      =>  saveLockIn_i,
-    valid_i     =>  lockin_valid_o(0),
+    valid_i     =>  lockin_valid_i,
     trigEdge    =>  trigEdge,
     delay       =>  delay,
     numSamples  =>  numSamples,
@@ -258,7 +288,6 @@ dac_o(0) <= signed(dacReg(15 downto 0)) when outputSelect(0) = '0' else lockin_d
 dac_o(1) <= signed(dacReg(31 downto 16)) when outputSelect(1) = '0' else lockin_dac_o;
 m_axis_tdata <= dac_to_slv(dac_o);
 m_axis_tvalid <= '1';
---ext_o <= (others => '0');
 ext_o <= extReg(7 downto 0);
 --
 -- Average data
@@ -272,20 +301,22 @@ port map(
     adc_i       =>  adc_i,
     valid_i     =>  '1',
     adc_o       =>  adc_f,
-    valid_o     =>  valid_f
+    valid_o     =>  valid_f_o
 );
 --
 -- Save data
 --
 saveData_i <= adc_to_slv(adc_f);
 memTrig <= (ext_i(7) and trigEnable) or triggers(0);
+valid_f_i <=    valid_f_o when enableGating(1) = '0' else
+                valid_f_o and dpg_o.data(1);
 SaveData: SaveADCData
 port map(
     readClk     =>  sysClk,
     writeClk    =>  adcClk,
     aresetn     =>  aresetn,
     data_i      =>  saveData_i,
-    valid_i     =>  valid_f,
+    valid_i     =>  valid_f_i,
     trigEdge    =>  trigEdge,
     delay       =>  delay,
     numSamples  =>  numSamples,
@@ -306,23 +337,42 @@ port map(
     adc_i       =>  adc_i,
     valid_i     =>  '1',
     adc_o       =>  adc_s,
-    valid_o     =>  valid_s
+    valid_o     =>  valid_s_o
 );
 --
 -- Save data into FIFO
 --
 fifo_i <= adc_to_slv(adc_s);
 fifoReset <= fifoReg(1);
+valid_s_i <=    valid_s_o when enableGating(2) = '0' else
+                valid_s_o and dpg_o.data(2);
 SlowFIFO: FIFOHandler
 port map(
     wr_clk      =>  adcClk,
     rd_clk      =>  sysClk,
     aresetn     =>  aresetn,
     data_i      =>  fifo_i,
-    valid_i     =>  valid_s,
+    valid_i     =>  valid_s_i,
     fifoReset   =>  fifoReset,
     bus_m       =>  fifo_m,
     bus_s       =>  fifo_s
+);
+--
+-- DPG instantiation and control
+--
+dpg_reset_i <= triggers(2);
+dpg_trig_i <= memTrig;
+DPG: DigitalPatternGenerator
+port map(
+    wrclk       =>  sysClk,
+    rdclk       =>  adcClk,
+    aresetn     =>  aresetn,
+    reset_i     =>  dpg_reset_i,
+    data_i      =>  dpg_data_i,
+    valid_i     =>  dpg_valid_i,
+    start_i     =>  dpg_trig_i,
+    debug_o     =>  dpg_debug_o,
+    data_o      =>  dpg_o
 );
 --
 -- AXI communication routing - connects bus objects to std_logic signals
@@ -350,15 +400,7 @@ begin
         fifoReg <= (others => '0');
         lockInRegs <= (others => (others => '0'));
         mem_bus(0).m <= INIT_MEM_BUS_MASTER;
-        mem_bus(1).m <= INIT_MEM_BUS_MASTER;
---        mem_bus(0).m.trig <= '0';
---        mem_bus(0).m.addr <= (others => '0');
---        mem_bus(0).m.status <= idle;
-        
---        mem_bus(1).m.trig <= '0';
---        mem_bus(1).m.addr <= (others => '0');
---        mem_bus(1).m.status <= idle;
-        
+        mem_bus(1).m <= INIT_MEM_BUS_MASTER;    
         trigHoldOff <= (others => '0');
         
     elsif rising_edge(sysClk) then
@@ -366,6 +408,8 @@ begin
             when idle =>
                 triggers <= (others => '0');
                 reset <= '0';
+                mem_bus(0).m.reset <= '0';
+                mem_bus(1).m.reset <= '0';
                 bus_s.resp <= "00";
                 if bus_m.valid(0) = '1' then
                     comState <= processing;
@@ -407,6 +451,7 @@ begin
                             -- Auxiliary data
                             --
                             when X"000030" => readOnly(bus_m,bus_s,comState,adcData_i);
+                            when X"000034" => readOnly(bus_m,bus_s,comState,dpg_debug_o);
                             --
                             -- Lock-in data
                             --
@@ -418,6 +463,23 @@ begin
                             -- External outputs
                             --
                             when X"000050" => rw(bus_m,bus_s,comState,extReg);
+                            --
+                            -- Digital pattern generator data
+                            --
+                            when X"000060" => 
+                                bus_s.resp <= "01";
+                                comState <= finishing;
+                                dpg_data_i <= bus_m.data;
+                                dpg_valid_i <= '1';
+                            --
+                            -- Reset memories
+                            --
+                            when X"000070" =>
+                                bus_s.resp <= "01";
+                                comState <= finishing;
+                                mem_bus(0).m.reset <= '1';
+                                mem_bus(1).m.reset <= '1';
+
                             when others => 
                                 comState <= finishing;
                                 bus_s.resp <= "11";
@@ -486,6 +548,7 @@ begin
             when finishing =>
 --                triggers <= (others => '0');
 --                reset <= '0';
+                dpg_valid_i <= '0';
                 comState <= idle;
 
             when others => comState <= idle;

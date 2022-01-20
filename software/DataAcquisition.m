@@ -11,6 +11,7 @@ classdef DataAcquisition < handle
         trigEnable      %Enable external triggering
         inputSelect     %Input selector for lock-in detection
         outputSelect    %Output selector for manual or lock-in output routed to DACs
+        enableGating    %Enables gating of signal acquisition
         log2AvgsFast    %Log2(#avgs) for fast acquisition
         shiftFast       %Additional shift left for averaged signals on fast acquisition
         delay           %Delay between trigger and start of fast acquistion
@@ -34,8 +35,11 @@ classdef DataAcquisition < handle
         lastSample      %Last sample registers, 2 elements
         holdOffReg      %Tigger hold off register
         adcReg          %ADC register
+        debugReg        %Debug register
         lockInRegs      %4-element lock-in registers
         extReg          %External digital output register
+        dpgReg          %Register for writing DPG data
+        auxReg          %Auxiliary register
     end
     
     properties(Constant)
@@ -93,22 +97,27 @@ classdef DataAcquisition < handle
             self.lastSample(2) = DeviceRegister('28',self.conn);
             self.holdOffReg = DeviceRegister('2C',self.conn);
             self.adcReg = DeviceRegister('30',self.conn);
+            self.debugReg = DeviceRegister('34',self.conn);
             self.lockInRegs = DeviceRegister.empty;
             for nn = 0:3
                 self.lockInRegs(nn + 1) = DeviceRegister(hex2dec('40') + nn*4,self.conn);
             end
             self.extReg = DeviceRegister('50',self.conn);
+            self.dpgReg = DeviceRegister('60',self.conn);
+            self.auxReg = DeviceRegister('70',self.conn);
             %
             % Fast-filtering parameters
             %
             self.trigEdge = DeviceParameter([0,0],self.topReg)...
                 .setLimits('lower',0,'upper',1);
-            self.trigEnable = DeviceParameter([4,4],self.topReg)...
-                .setLimits('lower',0,'upper',1);
             self.inputSelect = DeviceParameter([1,1],self.topReg)...
                 .setLimits('lower',0,'upper',1);
             self.outputSelect = DeviceParameter([2,3],self.topReg)...
                 .setLimits('lower',0,'upper',3);
+            self.trigEnable = DeviceParameter([4,4],self.topReg)...
+                .setLimits('lower',0,'upper',1);
+            self.enableGating = DeviceParameter([5,7],self.topReg)...
+                .setLimits('lower',0,'upper',2^3-1);
             self.log2AvgsFast = DeviceParameter([0,4],self.fastFiltReg)...
                 .setLimits('lower',0,'upper',31);
             self.shiftFast = DeviceParameter([5,10],self.fastFiltReg)...
@@ -155,6 +164,7 @@ classdef DataAcquisition < handle
             self.trigEnable.set(1);
             self.inputSelect.set(0);
             self.outputSelect.set(0);
+            self.enableGating.set(0);
             self.log2AvgsFast.set(0);
             self.shiftFast.set(0);
             self.delay.set(100e-9);
@@ -216,8 +226,10 @@ classdef DataAcquisition < handle
             self.holdOffReg.read;
             self.slowFiltReg.read;
             self.dacReg.read;
+            self.adcReg.read;
+            self.debugReg.read;
             self.lockInRegs.read;
-%             self.extReg.read;
+            self.extReg.read;
             self.conn.keepAlive = false;
             self.lastSample.read;
             %
@@ -227,6 +239,7 @@ classdef DataAcquisition < handle
             self.trigEnable.get;
             self.inputSelect.get;
             self.outputSelect.get;
+            self.enableGating.get;
             self.log2AvgsFast.get;
             self.shiftFast.get;
             self.delay.get;
@@ -257,6 +270,20 @@ classdef DataAcquisition < handle
             
             self.trigReg.set(1,[1,1]).write;
             self.trigReg.set(0,[1,1]);
+        end
+        
+        function self = dpgReset(self)
+            %DPGRESET resets the DPG
+            %
+            %   SELF = DPGRESET resets the DPG
+            self.trigReg.set(1,[2,2]).write;
+            self.trigReg.set(0,[2,2]);
+        end
+        
+        function self = memoryReset(self)
+            %MEMORYRESET Resets the two block memories
+            
+            self.auxReg.write;
         end
         
         function r = convert2volts(self,x)
@@ -379,6 +406,35 @@ classdef DataAcquisition < handle
             self.t = dt*(0:(size(self.data,1)-1));
         end
         
+        function writeDPG(self,t,v)
+            %WRITEDPG Writes data to the DPG
+            %
+            %   WRITEDPG(T,V) Writes data V at times T.  T should be an Nx1
+            %   array of times in seconds, and V should be an NxM array
+            %   where M < 8 comprised of 0's and 1's
+            if numel(t) ~= size(v,1)
+                error('Number of data points must be the same as the number of times!');
+            elseif size(v,2) > 8
+                error('Only 8 channels can be provided');
+            elseif size(v,2) > 1 && (~all((v(:) == 0) | (v(:) == 1)))
+                error('Values can only be 0 or 1');
+            end
+            
+            dt = uint32([round(diff(t(:))*self.CLK);1000]);
+            if any(dt > (2^24-1))
+                error('Time steps must be less than %.3f',(2^24-1)/self.CLK);
+            end
+            v = uint32(sum(v.*2.^(0:(size(v,2)-1)),2));
+            dt(end + 1) = 0;
+            v(end + 1) = 0;
+            d = zeros(numel(dt) + 1,1,'uint32');
+            d(1) = uint32(self.dpgReg.addr);
+            d(2:end) = dt + bitshift(v,24);
+            self.dpgReset;
+            self.conn.write(d,'mode','command','cmd',...
+                {'./writeFile',sprintf('%d',round(numel(d) - 1))});
+        end
+        
         function disp(self)
             strwidth = 25;
             fprintf(1,'DataAcquisition object with properties:\n');
@@ -395,6 +451,7 @@ classdef DataAcquisition < handle
             self.trigEnable.print('Trigger enable',strwidth,'%d');
             self.inputSelect.print('Input select',strwidth,'%d');
             self.outputSelect.print('Output select',strwidth','%d');
+            self.enableGating.print('Enable gating',strwidth,'%d');
             self.log2AvgsFast.print('Log 2 # Avgs (Fast)',strwidth,'%d');
             self.shiftFast.print('Fast shift left',strwidth,'%d');
             self.delay.print('Delay',strwidth,'%.3e','s');
@@ -416,14 +473,26 @@ classdef DataAcquisition < handle
             r(:,2) = -sind(ph)*v(:,1) + cosd(ph)*v(:,2);
         end
         
-        function r = getOptimumPhase(self,v)
+        function r = getOptimumPhase(self,v,subtract_mean)
             if nargin == 1
                 v = self.data;
+                subtract_mean = true;
+            elseif nargin == 2
+                subtract_mean = true;
+            elseif nargin == 3
+                if isempty(v)
+                    v = self.data;
+                end
             end
-            I = v(:,1) - mean(v(1:1e2,1));
-            Q = v(:,2) - mean(v(1:1e2,2));
-            f = @(ph) -sum((cosd(ph)*I + sind(ph)*Q).^2);
-            r = -fminbnd(f,0,360);
+            if subtract_mean
+                I = v(:,1) - mean(v(1:1e2,1));
+                Q = v(:,2) - mean(v(1:1e2,2));
+            else
+                I = v(:,1);
+                Q = v(:,2);
+            end
+            f = @(ph) -sum((cosd(ph)*I - sind(ph)*Q).^2);
+            r = fminbnd(f,0,360);
         end
         
         

@@ -189,10 +189,10 @@ begin
     startAXI <= '0';
     ext_i <= (others => '0');
     triggers <= (others => '0');
-    topReg <= (0 => '1', others => '0');
-    fastFiltReg <= (others => '0');
+    topReg <= (0 => '1', 5 => '1', 6 => '1', others => '0');
+    fastFiltReg <= (2 => '1', others => '0');
     delay <= std_logic_vector(to_unsigned(10,delay'length));
-    numSamples <= std_logic_vector(to_unsigned(10,numSamples'length));
+    numSamples <= std_logic_vector(to_unsigned(16380,numSamples'length));
     slowFiltReg <= X"0000_0004";
     
     axi_addr_single <= (others => '0');
@@ -210,29 +210,69 @@ begin
     startAXI <= '0';
     wait for 2 us;
     --
+    -- Write data to DPG
+    --
+    wait until rising_edge(sysclk);
+    axi_addr_single <= (others => '0');
+    axi_data_single <= (2 => '0', others => '0');
+    start_single_i <= "01";
+    wait until bus_s.resp(0) = '1';
+    start_single_i <= "00";
+    wait for 1 us;
+    
+    wait until rising_edge(sysclk);
+    axi_addr_single <= X"00000060";
+    axi_data_single <= X"FF" & std_logic_vector(to_unsigned(50,24));
+    start_single_i <= "01";
+    wait until bus_s.resp(0) = '1';
+    start_single_i <= "00";
+    wait for 1 us;
+    
+    wait until rising_edge(sysclk);
+    axi_data_single <= X"00" & std_logic_vector(to_unsigned(50,24));
+    start_single_i <= "01";
+    wait until bus_s.resp(0) = '1';
+    start_single_i <= "00";
+    wait for 1 us;
+    
+    wait until rising_edge(sysclk);
+    axi_data_single <= X"FF" & std_logic_vector(to_unsigned(25,24));
+    start_single_i <= "01";
+    wait until bus_s.resp(0) = '1';
+    start_single_i <= "00";
+    wait for 1 us;
+    
+    wait until rising_edge(sysclk);
+    axi_data_single <= X"00" & std_logic_vector(to_unsigned(25,24));
+    start_single_i <= "01";
+    wait until bus_s.resp(0) = '1';
+    start_single_i <= "00";
+    wait for 1 us;
+    
+    wait until rising_edge(sysclk);
+    axi_data_single <= X"00" & std_logic_vector(to_unsigned(00,24));
+    start_single_i <= "01";
+    wait until bus_s.resp(0) = '1';
+    start_single_i <= "00";
+    wait for 1 us;
+    
+    --
     -- Reset FIFO
     --
     wait until rising_edge(sysclk);
     axi_addr_single <= (others => '0');
-    axi_data_single <= (0 => '0', 1 => '1', others => '0');
-    start_single_i <= "01";
-    wait until bus_s.resp(0) = '1';
-    start_single_i <= "00";
-    wait for 1 us;
-    wait until rising_edge(sysclk);
-    axi_addr_single <= (others => '0');
     axi_data_single <= (0 => '1', 1 => '0', others => '0');
     start_single_i <= "01";
     wait until bus_s.resp(0) = '1';
     start_single_i <= "00";
-    wait for 1 us;
-    wait until rising_edge(sysclk);
-    axi_addr_single <= (others => '0');
-    axi_data_single <= (0 => '1', 1 => '0', others => '0');
-    start_single_i <= "01";
-    wait until bus_s.resp(0) = '1';
-    start_single_i <= "00";
-    wait for 1 us;
+--    wait for 1 us;
+--    wait until rising_edge(sysclk);
+--    axi_addr_single <= (others => '0');
+--    axi_data_single <= (0 => '1', 1 => '0', others => '0');
+--    start_single_i <= "01";
+--    wait until bus_s.resp(0) = '1';
+--    start_single_i <= "00";
+--    wait for 1 us;
 
 
     wait;

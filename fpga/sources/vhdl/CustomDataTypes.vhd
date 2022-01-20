@@ -147,7 +147,27 @@ end record t_module_status;
 constant INIT_MODULE_STATUS     :   t_module_status :=  (started    =>  '0',
                                                          running    =>  '0',
                                                          done       =>  '0');
+--
+-- DPG constants
+--
+constant DPG_TIME_WIDTH :   natural :=  24;
+constant DPG_DATA_WIDTH :   natural :=  8;
 
+subtype t_dpg_delay is unsigned(DPG_TIME_WIDTH - 1 downto 0);
+subtype t_dpg_data is std_logic_vector(DPG_DATA_WIDTH - 1 downto 0);
+
+type t_dpg is record
+    data    :   t_dpg_data;
+    delay   :   t_dpg_delay;
+    valid   :   std_logic;
+    status  :   t_module_status;
+end record t_dpg;
+
+constant INIT_DPG   :   t_dpg   :=  (   data    =>  (others => '0'),
+                                        delay   =>  (others => '0'),
+                                        valid   =>  '0',
+                                        status  =>  INIT_MODULE_STATUS);
+                                                
 procedure signal_sync(
     signal clk_i   :   in       std_logic;
     signal aresetn :   in       std_logic;
