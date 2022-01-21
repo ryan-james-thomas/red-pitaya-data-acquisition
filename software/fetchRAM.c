@@ -10,12 +10,13 @@
 #include <time.h>
 
 #define MAP_SIZE 262144UL
-#define DATA_LOC 0x42000000
+#define MEM_OFFSET 0x40000000
  
 int main(int argc, char **argv)
 {
     int fd;		                //File identifier
-    int numSamples;	          //Number of samples to collect
+    int numSamples;	            //Number of samples to collect
+    uint32_t data_location;     //Register address of data
     void *cfg;		            //A pointer to a memory location.  The * indicates that it is a pointer - it points to a location in memory
     char *name = "/dev/mem";	//Name of the memory resource
 
@@ -27,10 +28,31 @@ int main(int argc, char **argv)
     /*
     * Parse the input arguments
     */
-    if (argc < 2) {
-        numSamples = 100;
-    } else {
-        numSamples = atoi(argv[1]);
+    numSamples = 100;
+    data_location = 0x02000000;
+    int c;
+    while ((c = getopt(argc,argv,"n:r:")) != -1) {
+        switch (c) {
+        case 'n':
+            numSamples = atoi(optarg);
+            break;
+        case 'r':
+            data_location = strtol(optarg,NULL,0);
+            break;
+
+        case '?':
+            if (isprint (optopt))
+                fprintf (stderr, "Unknown option `-%c'.\n", optopt);
+            else
+                fprintf (stderr,
+                        "Unknown option character `\\x%x'.\n",
+                        optopt);
+            return 1;
+
+        default:
+            abort();
+            break;
+        }
     }
 
 
@@ -47,7 +69,7 @@ int main(int argc, char **argv)
     /*
     * mmap maps the memory location 0x40000000 to the pointer cfg, which "points" to that location in memory.
     */
-    cfg = mmap(0,MAP_SIZE,PROT_READ|PROT_WRITE,MAP_SHARED,fd,DATA_LOC);
+    cfg = mmap(0,MAP_SIZE,PROT_READ|PROT_WRITE,MAP_SHARED,fd,MEM_OFFSET + data_location);
     for (i = 0;i<numSamples;i++) {
       *(data + i) = *((uint32_t *)(cfg + (i << 2)));
     }

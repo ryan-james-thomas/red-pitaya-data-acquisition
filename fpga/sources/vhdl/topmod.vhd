@@ -109,6 +109,9 @@ component FIFOHandler is
 end component;
 
 component SaveADCData is
+    generic(
+        ADDR_WIDTH  :   natural :=  14
+    );
     port(
         readClk     :   in  std_logic;          --Clock for reading data
         writeClk    :   in  std_logic;          --Clock for writing data
@@ -119,7 +122,7 @@ component SaveADCData is
         
         trigEdge    :   in  std_logic;          --'0' for falling edge, '1' for rising edge
         delay       :   in  unsigned;           --Acquisition delay
-        numSamples  :   in  t_mem_addr;         --Number of samples to save
+        numSamples_i:   in  t_mem_addr;         --Number of samples to save
         trig_i      :   in  std_logic;          --Start trigger
         
         bus_m       :   in  t_mem_bus_master;   --Master memory bus
@@ -140,6 +143,30 @@ component DigitalPatternGenerator is
         start_i     :   in  std_logic;
         debug_o     :   out t_param_reg;
         data_o      :   out t_dpg
+    );
+end component;
+
+component TimeToDigital is
+    port(
+        clk         :   in  std_logic;
+        aresetn     :   in  std_logic;
+        reset_i     :   in  std_logic;
+        --
+        -- Registers
+        --
+        regs_i      :   in  t_param_reg_array(1 downto 0);
+        --
+        -- Input data
+        --
+        data_i      :   in  t_adc;
+        valid_i     :   in  std_logic;
+        trigEdge    :   in  std_logic;
+        start_i     :   in  std_logic;
+        --
+        -- Output data
+        --
+        data_o      :   out unsigned(31 downto 0);
+        valid_o     :   out std_logic
     );
 end component;
 
@@ -186,9 +213,7 @@ signal valid_f_o, valid_s_o :   std_logic;
 --
 -- Memory signals
 --
-signal mem_bus      :   t_mem_bus_array(1 downto 0);
-signal mem_bus_m    :   t_mem_bus_master;
-signal mem_bus_s    :   t_mem_bus_slave;
+signal mem_bus      :   t_mem_bus_array(2 downto 0);
 signal memReset     :   std_logic;
 signal saveData_i   :   std_logic_vector(31 downto 0);
 signal saveValid_i  :   std_logic;
@@ -230,6 +255,18 @@ signal dpg_trig_i   :   std_logic;
 signal dpg_o        :   t_dpg;
 signal enableGating :   std_logic_vector(2 downto 0);
 signal dpg_debug_o  :   t_param_reg;
+--
+-- Time-to-Digital converter
+--
+signal tdc_reset    :   std_logic;
+signal tdc_data_i   :   t_adc;
+signal tdc_trig_i   :   std_logic;
+signal tdc_valid_i  :   std_logic;
+signal tdc_valid_o  :   std_logic;
+signal tdc_data_o   :   unsigned(31 downto 0);
+signal tdc_regs     :   t_param_reg_array(1 downto 0);
+signal tdcSelect    :   std_logic;
+signal tdc_numSamples:  t_mem_addr;
 
 begin
 --
@@ -240,6 +277,7 @@ inputSelect <= topReg(1);
 outputSelect <= topReg(3 downto 2);
 trigEnable <= topReg(4);
 enableGating <= topReg(7 downto 5);
+tdcSelect <= topReg(8); 
 --
 -- Create ADC data
 --
@@ -267,6 +305,9 @@ saveLockIn_i <= adc_to_slv(lockin_data_o);
 lockin_valid_i <=   lockin_valid_o(0) when enableGating(0) = '0' else
                     lockin_valid_o(0) and dpg_o.data(0);
 SaveDataLockin: SaveADCData
+generic map(
+    ADDR_WIDTH  =>  14
+)
 port map(
     readClk     =>  sysClk,
     writeClk    =>  adcClk,
@@ -275,7 +316,7 @@ port map(
     valid_i     =>  lockin_valid_i,
     trigEdge    =>  trigEdge,
     delay       =>  delay,
-    numSamples  =>  numSamples,
+    numSamples_i=>  numSamples,
     trig_i      =>  memTrig,
     bus_m       =>  mem_bus(1).m,
     bus_s       =>  mem_bus(1).s
@@ -311,6 +352,9 @@ memTrig <= (ext_i(7) and trigEnable) or triggers(0);
 valid_f_i <=    valid_f_o when enableGating(1) = '0' else
                 valid_f_o and dpg_o.data(1);
 SaveData: SaveADCData
+generic map(
+    ADDR_WIDTH  =>  14
+)
 port map(
     readClk     =>  sysClk,
     writeClk    =>  adcClk,
@@ -319,7 +363,7 @@ port map(
     valid_i     =>  valid_f_i,
     trigEdge    =>  trigEdge,
     delay       =>  delay,
-    numSamples  =>  numSamples,
+    numSamples_i=>  numSamples,
     trig_i      =>  memTrig,
     bus_m       =>  mem_bus(0).m,
     bus_s       =>  mem_bus(0).s
@@ -375,6 +419,48 @@ port map(
     data_o      =>  dpg_o
 );
 --
+-- Time-to-digital converter
+--
+tdc_data_i <= adc_i(0) when tdcSelect = '0' else adc_i(1);
+tdc_valid_i <= '1';
+tdc_trig_i <= memTrig;
+tdc_reset <= triggers(3);
+TDC: TimeToDigital
+port map(
+    clk         =>  adcClk,
+    aresetn     =>  aresetn,
+    reset_i     =>  tdc_reset,
+    regs_i      =>  tdc_regs,
+    data_i      =>  tdc_data_i,
+    valid_i     =>  tdc_valid_i,
+    trigEdge    =>  trigEdge,
+    start_i     =>  tdc_trig_i,
+    data_o      =>  tdc_data_o,
+    valid_o     =>  tdc_valid_o
+);
+--
+-- Save TDC data
+--
+tdc_numSamples <= unsigned(tdc_regs(1)(tdc_numSamples'length - 1 downto 0));
+SaveDataTDC: SaveADCData
+generic map(
+    ADDR_WIDTH  =>  12
+)
+port map(
+    readClk     =>  sysClk,
+    writeClk    =>  adcClk,
+    aresetn     =>  aresetn,
+    data_i      =>  std_logic_vector(tdc_data_o),
+    valid_i     =>  tdc_valid_o,
+    trigEdge    =>  trigEdge,
+    delay       =>  delay,
+    numSamples_i=>  tdc_numSamples,
+    trig_i      =>  memTrig,
+    bus_m       =>  mem_bus(2).m,
+    bus_s       =>  mem_bus(2).s
+);
+
+--
 -- AXI communication routing - connects bus objects to std_logic signals
 --
 bus_m.addr <= addr_i;
@@ -399,8 +485,10 @@ begin
         fifo_m <= INIT_FIFO_BUS_MASTER;
         fifoReg <= (others => '0');
         lockInRegs <= (others => (others => '0'));
+        tdc_regs <= (0 => (X"0100" & X"0000"), 1 => X"00001000");
         mem_bus(0).m <= INIT_MEM_BUS_MASTER;
         mem_bus(1).m <= INIT_MEM_BUS_MASTER;    
+        mem_bus(2).m <= INIT_MEM_BUS_MASTER;   
         trigHoldOff <= (others => '0');
         
     elsif rising_edge(sysClk) then
@@ -410,6 +498,7 @@ begin
                 reset <= '0';
                 mem_bus(0).m.reset <= '0';
                 mem_bus(1).m.reset <= '0';
+                mem_bus(2).m.reset <= '0';
                 bus_s.resp <= "00";
                 if bus_m.valid(0) = '1' then
                     comState <= processing;
@@ -436,17 +525,12 @@ begin
                             when X"000010" => rw(bus_m,bus_s,comState,numSamples);
                             when X"000014" => rw(bus_m,bus_s,comState,slowFiltReg);
                             when X"000018" => rw(bus_m,bus_s,comState,dacReg);
+                            when X"000020" => rw(bus_m,bus_s,comState,trigHoldOff);
                             --
                             -- FIFO data
                             --
-                            when X"00001C" => rw(bus_m,bus_s,comState,fifoReg);
-                            when X"000020" => fifoRead(bus_m,bus_s,comState,fifo_m,fifo_s);
-                            --
-                            -- Read-only cases
-                            --
-                            when X"000024" => readOnly(bus_m,bus_s,comState,mem_bus(0).s.last);
-                            when X"000028" => readOnly(bus_m,bus_s,comState,mem_bus(1).s.last);
-                            when X"00002C" => rw(bus_m,bus_s,comState,trigHoldOff);
+                            when X"000024" => rw(bus_m,bus_s,comState,fifoReg);
+                            when X"000028" => fifoRead(bus_m,bus_s,comState,fifo_m,fifo_s);
                             --
                             -- Auxiliary data
                             --
@@ -479,7 +563,20 @@ begin
                                 comState <= finishing;
                                 mem_bus(0).m.reset <= '1';
                                 mem_bus(1).m.reset <= '1';
-
+                                mem_bus(2).m.reset <= '1';
+                            --
+                            -- TDC registers
+                            --
+                            when X"000080" => rw(bus_m,bus_s,comState,tdc_regs(0));
+                            when X"000084" => rw(bus_m,bus_s,comState,tdc_regs(1));
+                            --
+                            -- Read-only cases
+                            --
+                            when X"100000" => readOnly(bus_m,bus_s,comState,mem_bus(0).s.last);
+                            when X"100004" => readOnly(bus_m,bus_s,comState,mem_bus(1).s.last);
+                            when X"100008" => readOnly(bus_m,bus_s,comState,mem_bus(2).s.last);
+                            
+                            
                             when others => 
                                 comState <= finishing;
                                 bus_s.resp <= "11";
@@ -539,6 +636,29 @@ begin
                             mem_bus(1).m.trig <= '1';
                          else
                             mem_bus(1).m.trig <= '0';
+                        end if;
+                        
+                    --
+                    -- Memory reading of TDC
+                    --
+                    when X"04" =>  
+                        if bus_m.valid(1) = '0' then
+                            bus_s.resp <= "11";
+                            comState <= finishing;
+                            mem_bus(2).m.trig <= '0';
+                            mem_bus(2).m.status <= idle;
+                        elsif mem_bus(2).s.valid = '1' then
+                            bus_s.data <= mem_bus(2).s.data;
+                            comState <= finishing;
+                            bus_s.resp <= "01";
+                            mem_bus(2).m.status <= idle;
+                            mem_bus(2).m.trig <= '0';
+                        elsif mem_bus(2).s.status = idle then
+                            mem_bus(2).m.addr <= bus_m.addr(MEM_ADDR_WIDTH+1 downto 2);
+                            mem_bus(2).m.status <= waiting;
+                            mem_bus(2).m.trig <= '1';
+                         else
+                            mem_bus(2).m.trig <= '0';
                         end if;
                                             
                     when others => 

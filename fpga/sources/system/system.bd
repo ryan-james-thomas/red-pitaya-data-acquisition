@@ -2569,16 +2569,16 @@
               "AXI_Parse_0/s_axi"
             ]
           },
-          "Conn1": {
-            "interface_ports": [
-              "FIXED_IO",
-              "processing_system7_0/FIXED_IO"
-            ]
-          },
           "Conn2": {
             "interface_ports": [
               "DDR",
               "processing_system7_0/DDR"
+            ]
+          },
+          "Conn1": {
+            "interface_ports": [
+              "FIXED_IO",
+              "processing_system7_0/FIXED_IO"
             ]
           }
         },

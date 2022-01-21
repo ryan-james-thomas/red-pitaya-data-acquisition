@@ -22,6 +22,7 @@ classdef DataAcquisition < handle
         dac             %DAC outputs (2 element array)
         lockin          %Lock-in control
         ext_o           %External output control
+        tdc             %TDC control
     end
     
     properties(SetAccess = protected)
@@ -32,7 +33,7 @@ classdef DataAcquisition < handle
         numSamplesReg   %Number of samples register for fast acquisition
         slowFiltReg     %Slow-filtering register
         dacReg          %DAC output register
-        lastSample      %Last sample registers, 2 elements
+        lastSample      %Last sample registers, 3 elements
         holdOffReg      %Tigger hold off register
         adcReg          %ADC register
         debugReg        %Debug register
@@ -40,6 +41,7 @@ classdef DataAcquisition < handle
         extReg          %External digital output register
         dpgReg          %Register for writing DPG data
         auxReg          %Auxiliary register
+        tdcRegs        %2-element TDC registers
     end
     
     properties(Constant)
@@ -93,9 +95,7 @@ classdef DataAcquisition < handle
             self.numSamplesReg = DeviceRegister('10',self.conn);
             self.slowFiltReg = DeviceRegister('14',self.conn);
             self.dacReg = DeviceRegister('18',self.conn);
-            self.lastSample = DeviceRegister('24',self.conn);
-            self.lastSample(2) = DeviceRegister('28',self.conn);
-            self.holdOffReg = DeviceRegister('2C',self.conn);
+            self.holdOffReg = DeviceRegister('20',self.conn);
             self.adcReg = DeviceRegister('30',self.conn);
             self.debugReg = DeviceRegister('34',self.conn);
             self.lockInRegs = DeviceRegister.empty;
@@ -105,6 +105,12 @@ classdef DataAcquisition < handle
             self.extReg = DeviceRegister('50',self.conn);
             self.dpgReg = DeviceRegister('60',self.conn);
             self.auxReg = DeviceRegister('70',self.conn);
+            self.tdcRegs = DeviceRegister('80',self.conn);
+            self.tdcRegs(2) = DeviceRegister('84',self.conn);
+            
+            self.lastSample     = DeviceRegister('100000',self.conn);
+            self.lastSample(2)  = DeviceRegister('100004',self.conn);
+            self.lastSample(3)  = DeviceRegister('100008',self.conn);
             %
             % Fast-filtering parameters
             %
@@ -154,6 +160,10 @@ classdef DataAcquisition < handle
             % External outputs
             %
             self.ext_o = DeviceParameter([0,7],self.extReg);
+            %
+            % TDC control
+            %
+            self.tdc = DataAcquisitionTDC(self,self.tdcRegs);
         end
         
         function self = setDefaults(self,varargin)
@@ -176,6 +186,7 @@ classdef DataAcquisition < handle
             self.dac(2).set(0);
             self.lockin.setDefaults;
             self.ext_o.set(0);
+            self.tdc.setDefaults;
         end
         
         function self = check(self)
@@ -207,6 +218,7 @@ classdef DataAcquisition < handle
             self.conn.keepAlive = false;
             self.lockInRegs.write;
             self.extReg.write;
+            self.tdcRegs.write;
         end
         
         function self = fetch(self)
@@ -230,8 +242,10 @@ classdef DataAcquisition < handle
             self.debugReg.read;
             self.lockInRegs.read;
             self.extReg.read;
+            self.tdcRegs.read;
+            self.lastSample(1:2).read;
             self.conn.keepAlive = false;
-            self.lastSample.read;
+            self.lastSample(3).read;
             %
             % Get parameter data from registers
             %
@@ -282,8 +296,13 @@ classdef DataAcquisition < handle
         
         function self = memoryReset(self)
             %MEMORYRESET Resets the two block memories
-            
             self.auxReg.write;
+        end
+        
+        function self = tdcReset(self)
+            %TDCRESET Resets the TDC
+            self.trigReg.set(1,[3,3]).write;
+            self.trigReg.set(0,[3,3]);
         end
         
         function r = convert2volts(self,x)
@@ -342,7 +361,8 @@ classdef DataAcquisition < handle
                 numSamples = self.lastSample(1).value;
             end
             self.conn.write(0,'mode','command','cmd',...
-                {'./fetchRAM',sprintf('%d',round(numSamples))},...
+                {'./fetchRAM','-n',sprintf('%d',round(numSamples)),...
+                '-r','0x02000000'},...
                 'return_mode','file');
             raw = typecast(self.conn.recvMessage,'uint8');
             if strcmpi(self.jumpers,'hv')
@@ -372,7 +392,8 @@ classdef DataAcquisition < handle
                 numSamples = self.lastSample(2).value;
             end
             self.conn.write(0,'mode','command','cmd',...
-                {'./fetchIQ',sprintf('%d',round(numSamples))},...
+                {'./fetchRAM','-n',sprintf('%d',round(numSamples)),...
+                '-r','0x03000000'},...
                 'return_mode','file');
             raw = typecast(self.conn.recvMessage,'uint8');
             if strcmpi(self.jumpers,'hv')
@@ -384,6 +405,29 @@ classdef DataAcquisition < handle
             self.data = d;
             dt = self.CLK^-1 * 2^(self.lockin.cicRate.value);
             self.t = dt*(0:(size(self.data,1)-1));
+        end
+        
+        function self = getTDC(self,numSamples)
+            %GETTDC Fetches recorded in block memory from the device
+            %
+            %   SELF = GETTDC(SELF) Retrieves current number of recorded
+            %   samples from the device SELF
+            %
+            %   SELF = GETTDC(SELF,N) Retrieves N samples from device
+            
+            if nargin < 2
+                self.conn.keepAlive = true;
+                self.lastSample(3).read;
+                self.conn.keepAlive = false;
+                numSamples = self.lastSample(3).value;
+            end
+            self.conn.write(0,'mode','command','cmd',...
+                {'./fetchRAM','-n',sprintf('%d',round(numSamples)),...
+                '-r','0x04000000'},...
+                'return_mode','file');
+            raw = typecast(self.conn.recvMessage,'uint32');
+            self.data = double(raw)/self.CLK;
+            self.t = 1:numel(self.data);
         end
         
         function self = getFIFO(self,numSamples)
@@ -462,6 +506,7 @@ classdef DataAcquisition < handle
             self.dac(2).print('DAC 2',strwidth,'%.3f','V');
             self.lockin.print(strwidth);
             self.ext_o.print('Digital outputs',strwidth,'%02x');
+            self.tdc.print(strwidth);
         end
         
         function r = rotate(self,ph,v)

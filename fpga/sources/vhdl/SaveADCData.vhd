@@ -7,6 +7,9 @@ use work.AXI_Bus_Package.all;
 
 
 entity SaveADCData is
+    generic(
+        ADDR_WIDTH  :   natural :=  14
+    );
     port(
         readClk     :   in  std_logic;          --Clock for reading data
         writeClk    :   in  std_logic;          --Clock for writing data
@@ -17,7 +20,7 @@ entity SaveADCData is
         
         trigEdge    :   in  std_logic;          --'0' for falling edge, '1' for rising edge
         delay       :   in  unsigned;           --Acquisition delay
-        numSamples  :   in  t_mem_addr;         --Number of samples to save
+        numSamples_i:   in  t_mem_addr;         --Number of samples to save
         trig_i      :   in  std_logic;          --Start trigger
         
         bus_m       :   in  t_mem_bus_master;   --Master memory bus
@@ -39,13 +42,23 @@ COMPONENT BlockMem_Fast
   );
 END COMPONENT;
 
-constant MAX_MEM_ADDR   :   t_mem_addr                      :=  (others => '1');
+COMPONENT BlockMem_TDC
+  PORT (
+    clka : IN STD_LOGIC;
+    wea : IN STD_LOGIC_VECTOR(0 DOWNTO 0);
+    addra : IN STD_LOGIC_VECTOR(11 DOWNTO 0);
+    dina : IN STD_LOGIC_VECTOR(31 DOWNTO 0);
+    clkb : IN STD_LOGIC;
+    addrb : IN STD_LOGIC_VECTOR(11 DOWNTO 0);
+    doutb : OUT STD_LOGIC_VECTOR(31 DOWNTO 0)
+  );
+END COMPONENT;
 
-signal maxAddr          :   t_mem_addr                      :=  (others => '1');
-
-signal trig             :   std_logic_vector(1 downto 0)    :=  "00";
-signal wea              :   std_logic_vector(0 downto 0)    :=  "0";
-signal addra            :   t_mem_addr                      :=  (others => '0');
+signal trig             :   std_logic_vector(1 downto 0)        :=  "00";
+signal wea              :   std_logic_vector(0 downto 0)        :=  "0";
+signal addra            :   unsigned(ADDR_WIDTH - 1 downto 0)   :=  (others => '0');
+signal addrb            :   unsigned(ADDR_WIDTH - 1 downto 0)   :=  (others => '0');
+signal numSamples       :   unsigned(ADDR_WIDTH - 1 downto 0);
 
 signal state            :   natural range 0 to 3            :=  0;
 signal dina             :   std_logic_vector(31 downto 0)   :=  (others => '0');
@@ -63,7 +76,7 @@ begin
 
 dina(data_i'length-1 downto 0) <= data_i;
 dina(dina'length-1 downto data_i'length) <= (others => '0');
-
+numSamples <= resize(numSamples_i,numSamples'length);
 --
 -- Generate writeClk-synchronous address reset signal
 --
@@ -72,17 +85,32 @@ signal_sync(writeClk,aresetn,trig_i,trigSync);
 --
 -- Instantiate the block memory
 --
-maxAddr <= (maxAddr'range => '1');
-BlockMem_inst : BlockMem_Fast
-PORT MAP (
-    clka => writeClk,
-    wea => wea,
-    addra => std_logic_vector(addra),
-    dina => dina,
-    clkb => readClk,
-    addrb => std_logic_vector(bus_m.addr),
-    doutb => bus_s.data
-);
+addrb <= bus_m.addr(ADDR_WIDTH - 1 downto 0);
+FastGen: if ADDR_WIDTH = 14 generate
+    BlockMem_inst : BlockMem_Fast
+    PORT MAP (
+        clka => writeClk,
+        wea => wea,
+        addra => std_logic_vector(addra),
+        dina => dina,
+        clkb => readClk,
+        addrb => std_logic_vector(addrb),
+        doutb => bus_s.data
+    );
+end generate FastGen;
+
+TDCGen: if ADDR_WIDTH = 12 generate
+    BlockMem_inst : BlockMem_TDC
+    PORT MAP (
+        clka => writeClk,
+        wea => wea,
+        addra => std_logic_vector(addra),
+        dina => dina,
+        clkb => readClk,
+        addrb => std_logic_vector(addrb),
+        doutb => bus_s.data
+    );
+end generate TDCGen;
 
 --
 -- Write ADC data to memory
@@ -90,7 +118,7 @@ PORT MAP (
 -- On the falling edge of 'trig' we reset the counter
 --
 wea(0) <= valid_i and enable;
-bus_s.last <= addra;
+bus_s.last <= resize(unsigned(addra),t_mem_addr'length);
 WriteProc: process(writeClk,aresetn) is
 begin
     if aresetn = '0' then

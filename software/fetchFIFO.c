@@ -11,8 +11,8 @@
 
 #define MAP_SIZE 262144UL
 #define MEM_LOC  0x40000000
-#define FIFO_REG 0x0000001C
-#define FIFO_LOC 0x00000020
+#define FIFO_REG 0x00000024
+#define FIFO_LOC 0x00000028
  
 int main(int argc, char **argv)
 {
