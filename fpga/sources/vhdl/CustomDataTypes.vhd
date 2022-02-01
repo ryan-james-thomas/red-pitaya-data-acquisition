@@ -34,8 +34,8 @@ function dac_to_slv(ARG : t_dac_array) return std_logic_vector;
 --
 -- Defines AXI address and data widths
 --
-constant MEM_ADDR_WIDTH :   natural :=  14;
-constant MEM_DATA_WIDTH :   natural :=  32;
+constant MEM_ADDR_WIDTH :   natural :=  17;
+constant MEM_DATA_WIDTH :   natural :=  16;
 --
 -- Defines MEM address and data signals
 --

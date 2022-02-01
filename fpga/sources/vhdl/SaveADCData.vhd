@@ -34,11 +34,11 @@ COMPONENT BlockMem_Fast
   PORT (
     clka : IN STD_LOGIC;
     wea : IN STD_LOGIC_VECTOR(0 DOWNTO 0);
-    addra : IN STD_LOGIC_VECTOR(13 DOWNTO 0);
-    dina : IN STD_LOGIC_VECTOR(31 DOWNTO 0);
+    addra : IN STD_LOGIC_VECTOR(16 DOWNTO 0);
+    dina : IN STD_LOGIC_VECTOR(15 DOWNTO 0);
     clkb : IN STD_LOGIC;
-    addrb : IN STD_LOGIC_VECTOR(13 DOWNTO 0);
-    doutb : OUT STD_LOGIC_VECTOR(31 DOWNTO 0)
+    addrb : IN STD_LOGIC_VECTOR(16 DOWNTO 0);
+    doutb : OUT STD_LOGIC_VECTOR(15 DOWNTO 0)
   );
 END COMPONENT;
 
@@ -61,7 +61,7 @@ signal addrb            :   unsigned(ADDR_WIDTH - 1 downto 0)   :=  (others => '
 signal numSamples       :   unsigned(ADDR_WIDTH - 1 downto 0);
 
 signal state            :   natural range 0 to 3            :=  0;
-signal dina             :   std_logic_vector(31 downto 0)   :=  (others => '0');
+signal dina             :   std_logic_vector(15 downto 0)   :=  (others => '0');
 
 signal resetSync, trigSync        :   std_logic_vector(1 downto 0)    :=  "00";
 
@@ -86,31 +86,16 @@ signal_sync(writeClk,aresetn,trig_i,trigSync);
 -- Instantiate the block memory
 --
 addrb <= bus_m.addr(ADDR_WIDTH - 1 downto 0);
-FastGen: if ADDR_WIDTH = 14 generate
-    BlockMem_inst : BlockMem_Fast
-    PORT MAP (
-        clka => writeClk,
-        wea => wea,
-        addra => std_logic_vector(addra),
-        dina => dina,
-        clkb => readClk,
-        addrb => std_logic_vector(addrb),
-        doutb => bus_s.data
-    );
-end generate FastGen;
-
-TDCGen: if ADDR_WIDTH = 12 generate
-    BlockMem_inst : BlockMem_TDC
-    PORT MAP (
-        clka => writeClk,
-        wea => wea,
-        addra => std_logic_vector(addra),
-        dina => dina,
-        clkb => readClk,
-        addrb => std_logic_vector(addrb),
-        doutb => bus_s.data
-    );
-end generate TDCGen;
+BlockMem_inst : BlockMem_Fast
+PORT MAP (
+    clka => writeClk,
+    wea => wea,
+    addra => std_logic_vector(addra),
+    dina => dina,
+    clkb => readClk,
+    addrb => std_logic_vector(addrb),
+    doutb => bus_s.data
+);
 
 --
 -- Write ADC data to memory

@@ -215,7 +215,7 @@ signal valid_f_o, valid_s_o :   std_logic;
 --
 signal mem_bus      :   t_mem_bus_array(2 downto 0);
 signal memReset     :   std_logic;
-signal saveData_i   :   std_logic_vector(31 downto 0);
+signal saveData_i   :   std_logic_vector(15 downto 0);
 signal saveValid_i  :   std_logic;
 signal memTrig      :   std_logic;
 --
@@ -286,41 +286,41 @@ adc_i(1) <= signed(adcData_i(31 downto 16));
 --
 -- Lock-in detection
 --
-lockin_data_i <= adc_i(0) when inputSelect = '0' else adc_i(1);
-dds_reset <= triggers(1);
-LockIn: LockInDetector
-port map(
-    clk         =>  adcClk,
-    aresetn     =>  aresetn,
-    reset_i     =>  dds_reset,
-    regs_i      =>  lockinRegs,
-    dac_o       =>  lockin_dac_o,
-    data_i      =>  lockin_data_i,
-    valid_i     =>  '1',
-    data_o      =>  lockin_data_o,
-    valid_o     =>  lockin_valid_o
-);
+-- lockin_data_i <= adc_i(0) when inputSelect = '0' else adc_i(1);
+-- dds_reset <= triggers(1);
+-- LockIn: LockInDetector
+-- port map(
+--     clk         =>  adcClk,
+--     aresetn     =>  aresetn,
+--     reset_i     =>  dds_reset,
+--     regs_i      =>  lockinRegs,
+--     dac_o       =>  lockin_dac_o,
+--     data_i      =>  lockin_data_i,
+--     valid_i     =>  '1',
+--     data_o      =>  lockin_data_o,
+--     valid_o     =>  lockin_valid_o
+-- );
 
-saveLockIn_i <= adc_to_slv(lockin_data_o);
-lockin_valid_i <=   lockin_valid_o(0) when enableGating(0) = '0' else
-                    lockin_valid_o(0) and dpg_o.data(0);
-SaveDataLockin: SaveADCData
-generic map(
-    ADDR_WIDTH  =>  14
-)
-port map(
-    readClk     =>  sysClk,
-    writeClk    =>  adcClk,
-    aresetn     =>  aresetn,
-    data_i      =>  saveLockIn_i,
-    valid_i     =>  lockin_valid_i,
-    trigEdge    =>  trigEdge,
-    delay       =>  delay,
-    numSamples_i=>  numSamples,
-    trig_i      =>  memTrig,
-    bus_m       =>  mem_bus(1).m,
-    bus_s       =>  mem_bus(1).s
-);
+-- saveLockIn_i <= adc_to_slv(lockin_data_o);
+-- lockin_valid_i <=   lockin_valid_o(0) when enableGating(0) = '0' else
+--                     lockin_valid_o(0) and dpg_o.data(0);
+-- SaveDataLockin: SaveADCData
+-- generic map(
+--     ADDR_WIDTH  =>  14
+-- )
+-- port map(
+--     readClk     =>  sysClk,
+--     writeClk    =>  adcClk,
+--     aresetn     =>  aresetn,
+--     data_i      =>  saveLockIn_i,
+--     valid_i     =>  lockin_valid_i,
+--     trigEdge    =>  trigEdge,
+--     delay       =>  delay,
+--     numSamples_i=>  numSamples,
+--     trig_i      =>  memTrig,
+--     bus_m       =>  mem_bus(1).m,
+--     bus_s       =>  mem_bus(1).s
+-- );
 
 --
 -- DAC Outputs
@@ -347,13 +347,13 @@ port map(
 --
 -- Save data
 --
-saveData_i <= adc_to_slv(adc_f);
+saveData_i <= std_logic_vector(adc_f(0)) when inputSelect = '0' else std_logic_vector(adc_f(1));
 memTrig <= (ext_i(7) and trigEnable) or triggers(0);
 valid_f_i <=    valid_f_o when enableGating(1) = '0' else
                 valid_f_o and dpg_o.data(1);
 SaveData: SaveADCData
 generic map(
-    ADDR_WIDTH  =>  14
+    ADDR_WIDTH  =>  17
 )
 port map(
     readClk     =>  sysClk,
@@ -386,79 +386,79 @@ port map(
 --
 -- Save data into FIFO
 --
-fifo_i <= adc_to_slv(adc_s);
-fifoReset <= fifoReg(1);
-valid_s_i <=    valid_s_o when enableGating(2) = '0' else
-                valid_s_o and dpg_o.data(2);
-SlowFIFO: FIFOHandler
-port map(
-    wr_clk      =>  adcClk,
-    rd_clk      =>  sysClk,
-    aresetn     =>  aresetn,
-    data_i      =>  fifo_i,
-    valid_i     =>  valid_s_i,
-    fifoReset   =>  fifoReset,
-    bus_m       =>  fifo_m,
-    bus_s       =>  fifo_s
-);
+--fifo_i <= adc_to_slv(adc_s);
+--fifoReset <= fifoReg(1);
+--valid_s_i <=    valid_s_o when enableGating(2) = '0' else
+--                valid_s_o and dpg_o.data(2);
+--SlowFIFO: FIFOHandler
+--port map(
+--    wr_clk      =>  adcClk,
+--    rd_clk      =>  sysClk,
+--    aresetn     =>  aresetn,
+--    data_i      =>  fifo_i,
+--    valid_i     =>  valid_s_i,
+--    fifoReset   =>  fifoReset,
+--    bus_m       =>  fifo_m,
+--    bus_s       =>  fifo_s
+--);
 --
 -- DPG instantiation and control
 --
-dpg_reset_i <= triggers(2);
-dpg_trig_i <= memTrig;
-DPG: DigitalPatternGenerator
-port map(
-    wrclk       =>  sysClk,
-    rdclk       =>  adcClk,
-    aresetn     =>  aresetn,
-    reset_i     =>  dpg_reset_i,
-    data_i      =>  dpg_data_i,
-    valid_i     =>  dpg_valid_i,
-    start_i     =>  dpg_trig_i,
-    debug_o     =>  dpg_debug_o,
-    data_o      =>  dpg_o
-);
+-- dpg_reset_i <= triggers(2);
+-- dpg_trig_i <= memTrig;
+-- DPG: DigitalPatternGenerator
+-- port map(
+--     wrclk       =>  sysClk,
+--     rdclk       =>  adcClk,
+--     aresetn     =>  aresetn,
+--     reset_i     =>  dpg_reset_i,
+--     data_i      =>  dpg_data_i,
+--     valid_i     =>  dpg_valid_i,
+--     start_i     =>  dpg_trig_i,
+--     debug_o     =>  dpg_debug_o,
+--     data_o      =>  dpg_o
+-- );
 --
 -- Time-to-digital converter
 --
-tdc_data_i <= adc_i(0) when tdcSelect = '0' else adc_i(1);
-tdc_valid_i <= '1';
-tdc_trig_i <= memTrig;
-tdc_reset <= triggers(3);
-TDC: TimeToDigital
-port map(
-    clk         =>  adcClk,
-    aresetn     =>  aresetn,
-    reset_i     =>  tdc_reset,
-    regs_i      =>  tdc_regs,
-    data_i      =>  tdc_data_i,
-    valid_i     =>  tdc_valid_i,
-    trigEdge    =>  trigEdge,
-    start_i     =>  tdc_trig_i,
-    data_o      =>  tdc_data_o,
-    valid_o     =>  tdc_valid_o
-);
+-- tdc_data_i <= adc_i(0) when tdcSelect = '0' else adc_i(1);
+-- tdc_valid_i <= '1';
+-- tdc_trig_i <= memTrig;
+-- tdc_reset <= triggers(3);
+-- TDC: TimeToDigital
+-- port map(
+--     clk         =>  adcClk,
+--     aresetn     =>  aresetn,
+--     reset_i     =>  tdc_reset,
+--     regs_i      =>  tdc_regs,
+--     data_i      =>  tdc_data_i,
+--     valid_i     =>  tdc_valid_i,
+--     trigEdge    =>  trigEdge,
+--     start_i     =>  tdc_trig_i,
+--     data_o      =>  tdc_data_o,
+--     valid_o     =>  tdc_valid_o
+-- );
 --
 -- Save TDC data
 --
-tdc_numSamples <= unsigned(tdc_regs(1)(tdc_numSamples'length - 1 downto 0));
-SaveDataTDC: SaveADCData
-generic map(
-    ADDR_WIDTH  =>  12
-)
-port map(
-    readClk     =>  sysClk,
-    writeClk    =>  adcClk,
-    aresetn     =>  aresetn,
-    data_i      =>  std_logic_vector(tdc_data_o),
-    valid_i     =>  tdc_valid_o,
-    trigEdge    =>  trigEdge,
-    delay       =>  delay,
-    numSamples_i=>  tdc_numSamples,
-    trig_i      =>  memTrig,
-    bus_m       =>  mem_bus(2).m,
-    bus_s       =>  mem_bus(2).s
-);
+-- tdc_numSamples <= unsigned(tdc_regs(1)(tdc_numSamples'length - 1 downto 0));
+-- SaveDataTDC: SaveADCData
+-- generic map(
+--     ADDR_WIDTH  =>  12
+-- )
+-- port map(
+--     readClk     =>  sysClk,
+--     writeClk    =>  adcClk,
+--     aresetn     =>  aresetn,
+--     data_i      =>  std_logic_vector(tdc_data_o),
+--     valid_i     =>  tdc_valid_o,
+--     trigEdge    =>  trigEdge,
+--     delay       =>  delay,
+--     numSamples_i=>  tdc_numSamples,
+--     trig_i      =>  memTrig,
+--     bus_m       =>  mem_bus(2).m,
+--     bus_s       =>  mem_bus(2).s
+-- );
 
 --
 -- AXI communication routing - connects bus objects to std_logic signals
@@ -601,7 +601,8 @@ begin
                             mem_bus(0).m.trig <= '0';
                             mem_bus(0).m.status <= idle;
                         elsif mem_bus(0).s.valid = '1' then
-                            bus_s.data <= mem_bus(0).s.data;
+                            bus_s.data(15 downto 0) <= mem_bus(0).s.data;
+                            bus_s.data(31 downto 16) <= (others => '0');
                             comState <= finishing;
                             bus_s.resp <= "01";
                             mem_bus(0).m.status <= idle;
@@ -618,48 +619,48 @@ begin
                     --
                     -- Memory reading of lock-in detection
                     --
-                    when X"03" =>  
-                        if bus_m.valid(1) = '0' then
-                            bus_s.resp <= "11";
-                            comState <= finishing;
-                            mem_bus(1).m.trig <= '0';
-                            mem_bus(1).m.status <= idle;
-                        elsif mem_bus(1).s.valid = '1' then
-                            bus_s.data <= mem_bus(1).s.data;
-                            comState <= finishing;
-                            bus_s.resp <= "01";
-                            mem_bus(1).m.status <= idle;
-                            mem_bus(1).m.trig <= '0';
-                        elsif mem_bus(1).s.status = idle then
-                            mem_bus(1).m.addr <= bus_m.addr(MEM_ADDR_WIDTH+1 downto 2);
-                            mem_bus(1).m.status <= waiting;
-                            mem_bus(1).m.trig <= '1';
-                         else
-                            mem_bus(1).m.trig <= '0';
-                        end if;
+                    -- when X"03" =>  
+                    --     if bus_m.valid(1) = '0' then
+                    --         bus_s.resp <= "11";
+                    --         comState <= finishing;
+                    --         mem_bus(1).m.trig <= '0';
+                    --         mem_bus(1).m.status <= idle;
+                    --     elsif mem_bus(1).s.valid = '1' then
+                    --         bus_s.data <= mem_bus(1).s.data;
+                    --         comState <= finishing;
+                    --         bus_s.resp <= "01";
+                    --         mem_bus(1).m.status <= idle;
+                    --         mem_bus(1).m.trig <= '0';
+                    --     elsif mem_bus(1).s.status = idle then
+                    --         mem_bus(1).m.addr <= bus_m.addr(MEM_ADDR_WIDTH+1 downto 2);
+                    --         mem_bus(1).m.status <= waiting;
+                    --         mem_bus(1).m.trig <= '1';
+                    --      else
+                    --         mem_bus(1).m.trig <= '0';
+                    --     end if;
                         
                     --
                     -- Memory reading of TDC
                     --
-                    when X"04" =>  
-                        if bus_m.valid(1) = '0' then
-                            bus_s.resp <= "11";
-                            comState <= finishing;
-                            mem_bus(2).m.trig <= '0';
-                            mem_bus(2).m.status <= idle;
-                        elsif mem_bus(2).s.valid = '1' then
-                            bus_s.data <= mem_bus(2).s.data;
-                            comState <= finishing;
-                            bus_s.resp <= "01";
-                            mem_bus(2).m.status <= idle;
-                            mem_bus(2).m.trig <= '0';
-                        elsif mem_bus(2).s.status = idle then
-                            mem_bus(2).m.addr <= bus_m.addr(MEM_ADDR_WIDTH+1 downto 2);
-                            mem_bus(2).m.status <= waiting;
-                            mem_bus(2).m.trig <= '1';
-                         else
-                            mem_bus(2).m.trig <= '0';
-                        end if;
+                    -- when X"04" =>  
+                    --     if bus_m.valid(1) = '0' then
+                    --         bus_s.resp <= "11";
+                    --         comState <= finishing;
+                    --         mem_bus(2).m.trig <= '0';
+                    --         mem_bus(2).m.status <= idle;
+                    --     elsif mem_bus(2).s.valid = '1' then
+                    --         bus_s.data <= mem_bus(2).s.data;
+                    --         comState <= finishing;
+                    --         bus_s.resp <= "01";
+                    --         mem_bus(2).m.status <= idle;
+                    --         mem_bus(2).m.trig <= '0';
+                    --     elsif mem_bus(2).s.status = idle then
+                    --         mem_bus(2).m.addr <= bus_m.addr(MEM_ADDR_WIDTH+1 downto 2);
+                    --         mem_bus(2).m.status <= waiting;
+                    --         mem_bus(2).m.trig <= '1';
+                    --      else
+                    --         mem_bus(2).m.trig <= '0';
+                    --     end if;
                                             
                     when others => 
                         comState <= finishing;

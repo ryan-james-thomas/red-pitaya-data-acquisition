@@ -132,7 +132,7 @@ classdef DataAcquisition < handle
                 .setLimits('lower',64e-9,'upper',(2^32-1)/self.CLK)...
                 .setFunctions('to',@(x) x*self.CLK,'from',@(x) x/self.CLK);
             self.numSamples = DeviceParameter([0,31],self.numSamplesReg)...
-                .setLimits('lower',0,'upper',16384);
+                .setLimits('lower',0,'upper',2^17-1);
             self.holdOff = DeviceParameter([0,31],self.holdOffReg)...
                 .setLimits('lower',0,'upper',(2^32-1)/self.CLK)...
                 .setFunctions('to',@(x) x*self.CLK,'from',@(x) x/self.CLK);
@@ -575,12 +575,12 @@ classdef DataAcquisition < handle
             end
             
             Nraw = numel(raw);
-            d = zeros(Nraw/4,2,'int16');
+            d = zeros(Nraw/4,1,'int16');
             
             mm = 1;
             for nn = 1:4:Nraw
                 d(mm,1) = typecast(uint8(raw(nn + (0:1))),'int16');
-                d(mm,2) = typecast(uint8(raw(nn + (2:3))),'int16');
+%                 d(mm,2) = typecast(uint8(raw(nn + (2:3))),'int16');
                 mm = mm + 1;
             end
             
